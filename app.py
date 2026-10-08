@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -19,7 +19,7 @@ st.set_page_config(
 
 
 # ============================================================
-# APPLICATION CONFIGURATION
+# CONFIGURATION
 # ============================================================
 
 APP_NAME = "BAITHAK WITH AI"
@@ -45,7 +45,8 @@ Do not invent facts.
 
 If you are uncertain, clearly say that you are uncertain.
 
-You can help users with:
+You can help with:
+
 - Artificial Intelligence
 - Generative AI
 - Agentic AI
@@ -62,17 +63,13 @@ You can help users with:
 
 
 # ============================================================
-# SECRET / ENVIRONMENT HELPER
+# SECRET HELPER
 # ============================================================
 
 def get_secret(name, default=None):
-    """
-    Read configuration from:
-    1. Streamlit Secrets
-    2. Environment variables
-    """
 
     try:
+
         value = st.secrets.get(name)
 
         if value:
@@ -81,10 +78,16 @@ def get_secret(name, default=None):
     except Exception:
         pass
 
-    return os.getenv(name, default)
+    return os.getenv(
+        name,
+        default,
+    )
 
 
-OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+OPENAI_API_KEY = get_secret(
+    "OPENAI_API_KEY"
+)
+
 OPENAI_MODEL = get_secret(
     "OPENAI_MODEL",
     DEFAULT_MODEL,
@@ -112,7 +115,7 @@ if "last_error" not in st.session_state:
 
 
 # ============================================================
-# GLOBAL CSS
+# APPLICATION CSS
 # ============================================================
 
 st.markdown(
@@ -120,21 +123,24 @@ st.markdown(
     <style>
 
     /* ========================================================
-       GLOBAL APP
+       APPLICATION BACKGROUND
        ======================================================== */
 
     .stApp {
+
         background:
             radial-gradient(
                 circle at 15% 10%,
                 rgba(255,255,255,0.95),
                 transparent 25%
             ),
+
             radial-gradient(
                 circle at 90% 15%,
                 rgba(95,220,255,0.30),
                 transparent 30%
             ),
+
             linear-gradient(
                 135deg,
                 #effcff 0%,
@@ -146,10 +152,39 @@ st.markdown(
         color: #063b55;
     }
 
+
     .block-container {
+
         max-width: 1250px;
+
         padding-top: 1.5rem;
+
         padding-bottom: 2rem;
+    }
+
+
+    /* ========================================================
+       STREAMLIT HEADINGS
+       ======================================================== */
+
+    h1 {
+
+        color:
+            #034e6d !important;
+
+        font-weight:
+            900 !important;
+
+        letter-spacing:
+            1px;
+    }
+
+
+    h2,
+    h3 {
+
+        color:
+            #075477 !important;
     }
 
 
@@ -158,6 +193,7 @@ st.markdown(
        ======================================================== */
 
     [data-testid="stSidebar"] {
+
         background:
             linear-gradient(
                 180deg,
@@ -167,22 +203,15 @@ st.markdown(
             );
 
         border-right:
-            1px solid rgba(0,110,160,0.15);
+            1px solid
+            rgba(0,110,160,0.15);
     }
+
 
     [data-testid="stSidebar"] * {
-        color: #063b55;
-    }
 
-
-    /* ========================================================
-       HEADINGS
-       ======================================================== */
-
-    h1,
-    h2,
-    h3 {
-        color: #034e6d;
+        color:
+            #063b55;
     }
 
 
@@ -191,33 +220,45 @@ st.markdown(
        ======================================================== */
 
     .glass-card {
-        padding: 22px;
 
-        margin-top: 18px;
+        padding:
+            22px;
 
-        border-radius: 22px;
+        margin-top:
+            18px;
+
+        border-radius:
+            22px;
 
         background:
             rgba(255,255,255,0.68);
 
         border:
-            1px solid rgba(0,130,180,0.14);
+            1px solid
+            rgba(0,130,180,0.14);
 
         box-shadow:
-            0 12px 35px rgba(0,100,150,0.10);
+            0 12px 35px
+            rgba(0,100,150,0.10);
 
         backdrop-filter:
             blur(14px);
     }
 
+
     .card-title {
-        color: #005477;
 
-        font-size: 22px;
+        color:
+            #005477;
 
-        font-weight: 850;
+        font-size:
+            22px;
 
-        margin-bottom: 8px;
+        font-weight:
+            850;
+
+        margin-bottom:
+            8px;
     }
 
 
@@ -226,15 +267,19 @@ st.markdown(
        ======================================================== */
 
     [data-testid="stChatMessage"] {
+
         background:
             rgba(255,255,255,0.58);
 
-        border-radius: 18px;
+        border-radius:
+            18px;
 
         border:
-            1px solid rgba(0,120,170,0.10);
+            1px solid
+            rgba(0,120,170,0.10);
 
-        margin-bottom: 10px;
+        margin-bottom:
+            10px;
     }
 
 
@@ -244,12 +289,15 @@ st.markdown(
 
     .stButton > button {
 
-        border-radius: 14px;
+        border-radius:
+            14px;
 
         border:
-            1px solid rgba(0,110,160,0.20);
+            1px solid
+            rgba(0,110,160,0.20);
 
-        font-weight: 750;
+        font-weight:
+            750;
 
         background:
             linear-gradient(
@@ -258,14 +306,17 @@ st.markdown(
                 #dff7ff
             );
 
-        color: #005477;
+        color:
+            #005477;
 
         box-shadow:
-            0 5px 15px rgba(0,100,150,0.10);
+            0 5px 15px
+            rgba(0,100,150,0.10);
 
         transition:
             all 0.2s ease;
     }
+
 
     .stButton > button:hover {
 
@@ -279,38 +330,8 @@ st.markdown(
             translateY(-1px);
 
         box-shadow:
-            0 8px 20px rgba(0,130,180,0.18);
-    }
-
-
-    /* ========================================================
-       STATUS
-       ======================================================== */
-
-    .status-pill {
-
-        display: inline-block;
-
-        padding:
-            8px 16px;
-
-        border-radius:
-            30px;
-
-        background:
-            rgba(0,85,120,0.08);
-
-        border:
-            1px solid rgba(0,100,150,0.12);
-
-        color:
-            #075477;
-
-        font-weight:
-            750;
-
-        margin-top:
-            10px;
+            0 8px 20px
+            rgba(0,130,180,0.18);
     }
 
 
@@ -336,10 +357,13 @@ st.markdown(
             14px;
 
         border-top:
-            1px solid rgba(0,100,150,0.15);
+            1px solid
+            rgba(0,100,150,0.15);
     }
 
+
     .footer strong {
+
         color:
             #004d70;
     }
@@ -352,8 +376,12 @@ st.markdown(
     @media (max-width: 700px) {
 
         .block-container {
-            padding-left: 0.8rem;
-            padding-right: 0.8rem;
+
+            padding-left:
+                0.8rem;
+
+            padding-right:
+                0.8rem;
         }
 
     }
@@ -365,7 +393,7 @@ st.markdown(
 
 
 # ============================================================
-# ANIMATED SVG ROBOT
+# ANIMATED ROBOT
 # ============================================================
 
 def show_animated_robot():
@@ -382,7 +410,9 @@ def show_animated_robot():
 
     <style>
 
-    html, body {
+    html,
+    body {
+
         margin: 0;
         padding: 0;
 
@@ -392,11 +422,6 @@ def show_animated_robot():
         overflow: hidden;
 
         background: transparent;
-
-        font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
     }
 
 
@@ -404,7 +429,7 @@ def show_animated_robot():
 
         width: 100%;
 
-        height: 560px;
+        height: 550px;
 
         display: flex;
 
@@ -432,7 +457,7 @@ def show_animated_robot():
 
 
     /* ======================================================
-       GLOW
+       FLOOR GLOW
        ====================================================== */
 
     .glow {
@@ -516,16 +541,61 @@ def show_animated_robot():
             50%;
 
         background:
-            #ffffff;
+            white;
 
         box-shadow:
-            0 0 8px #ffffff,
+            0 0 8px white,
             0 0 18px #00eaff,
             0 0 35px #00eaff;
 
         animation:
             antennaPulse 1.2s
             infinite;
+    }
+
+
+    /* ======================================================
+       EARS
+       ====================================================== */
+
+    .ear {
+
+        position: absolute;
+
+        top: 108px;
+
+        width: 42px;
+
+        height: 75px;
+
+        border-radius:
+            22px;
+
+        background:
+            linear-gradient(
+                145deg,
+                #effcff,
+                #86d9f2
+            );
+
+        border:
+            6px solid #086d98;
+
+        box-shadow:
+            0 8px 18px
+            rgba(0,80,120,0.20);
+    }
+
+
+    .ear.left {
+
+        left: 35px;
+    }
+
+
+    .ear.right {
+
+        right: 35px;
     }
 
 
@@ -571,49 +641,6 @@ def show_animated_robot():
 
 
     /* ======================================================
-       EARS
-       ====================================================== */
-
-    .ear {
-
-        position: absolute;
-
-        top: 108px;
-
-        width: 42px;
-
-        height: 75px;
-
-        border-radius:
-            22px;
-
-        background:
-            linear-gradient(
-                145deg,
-                #effcff,
-                #86d9f2
-            );
-
-        border:
-            6px solid #086d98;
-
-        box-shadow:
-            0 8px 18px
-            rgba(0,80,120,0.20);
-    }
-
-
-    .ear.left {
-        left: 35px;
-    }
-
-
-    .ear.right {
-        right: 35px;
-    }
-
-
-    /* ======================================================
        EYES
        ====================================================== */
 
@@ -650,17 +677,19 @@ def show_animated_robot():
 
 
     .eye.left {
+
         left: 48px;
     }
 
 
     .eye.right {
+
         right: 48px;
     }
 
 
     /* ======================================================
-       EYE SCAN
+       EYE SCANNER
        ====================================================== */
 
     .scan-line {
@@ -766,7 +795,7 @@ def show_animated_robot():
 
 
     /* ======================================================
-       CHEST DISPLAY
+       CHEST PANEL
        ====================================================== */
 
     .chest {
@@ -791,8 +820,7 @@ def show_animated_robot():
             #063e57;
 
         border:
-            3px solid
-            #00bde9;
+            3px solid #00bde9;
 
         box-shadow:
             inset 0 0 18px
@@ -830,11 +858,13 @@ def show_animated_robot():
 
 
     .dot.one {
+
         left: 20px;
     }
 
 
     .dot.two {
+
         left: 46px;
 
         animation-delay:
@@ -843,6 +873,7 @@ def show_animated_robot():
 
 
     .dot.three {
+
         right: 20px;
 
         animation-delay:
@@ -993,11 +1024,13 @@ def show_animated_robot():
 
         0%,
         100% {
-            height: 14px;
+            height:
+                14px;
         }
 
         50% {
-            height: 30px;
+            height:
+                30px;
         }
     }
 
@@ -1010,7 +1043,8 @@ def show_animated_robot():
                 translateX(-50%)
                 scale(1);
 
-            opacity: 1;
+            opacity:
+                1;
         }
 
         50% {
@@ -1018,7 +1052,8 @@ def show_animated_robot():
                 translateX(-50%)
                 scale(1.35);
 
-            opacity: 0.65;
+            opacity:
+                0.65;
         }
     }
 
@@ -1047,13 +1082,19 @@ def show_animated_robot():
 
         0%,
         100% {
-            top: 25%;
-            opacity: 0.5;
+            top:
+                25%;
+
+            opacity:
+                0.5;
         }
 
         50% {
-            top: 70%;
-            opacity: 1;
+            top:
+                70%;
+
+            opacity:
+                1;
         }
     }
 
@@ -1114,7 +1155,6 @@ def show_animated_robot():
 
     </head>
 
-
     <body>
 
         <div class="robot-wrapper">
@@ -1127,11 +1167,9 @@ def show_animated_robot():
 
                 <div class="antenna-light"></div>
 
-
                 <div class="ear left"></div>
 
                 <div class="ear right"></div>
-
 
                 <div class="head">
 
@@ -1147,11 +1185,9 @@ def show_animated_robot():
 
                 </div>
 
-
                 <div class="arm left"></div>
 
                 <div class="arm right"></div>
-
 
                 <div class="body">
 
@@ -1166,7 +1202,6 @@ def show_animated_robot():
                     </div>
 
                 </div>
-
 
                 <div class="hand left"></div>
 
@@ -1183,7 +1218,7 @@ def show_animated_robot():
 
     components.html(
         robot_html,
-        height=570,
+        height=560,
         scrolling=False,
     )
 
@@ -1208,6 +1243,7 @@ def create_openai_client():
         )
 
     except Exception:
+
         return None
 
 
@@ -1274,7 +1310,7 @@ def is_model_error(error_text):
 
 
 # ============================================================
-# FRIENDLY OPENAI ERROR
+# OPENAI ERROR DISPLAY
 # ============================================================
 
 def show_openai_error(error):
@@ -1285,6 +1321,7 @@ def show_openai_error(error):
 
     st.session_state.last_error = error_text
 
+
     if is_quota_error(error_text):
 
         st.warning(
@@ -1293,51 +1330,58 @@ def show_openai_error(error):
         )
 
         st.info(
-            "BAITHAK WITH AI has automatically switched "
-            "to Demo Mode."
+            "BAITHAK WITH AI has automatically "
+            "switched to Demo Mode."
         )
+
 
     elif is_auth_error(error_text):
 
         st.warning(
-            "⚠️ Your OpenAI API credential could not "
-            "be verified."
+            "⚠️ Your OpenAI API credential "
+            "could not be verified."
         )
 
         st.info(
-            "Please check OPENAI_API_KEY in "
-            "Streamlit Secrets."
+            "Please check OPENAI_API_KEY "
+            "in Streamlit Secrets."
         )
+
 
     elif is_model_error(error_text):
 
         st.warning(
-            "⚠️ The selected OpenAI model is unavailable "
-            "for this API account."
+            "⚠️ The selected OpenAI model "
+            "is unavailable."
         )
 
         st.info(
-            "BAITHAK WITH AI has switched to Demo Mode."
+            "BAITHAK WITH AI has switched "
+            "to Demo Mode."
         )
+
 
     else:
 
         st.warning(
-            "⚠️ OpenAI service is temporarily unavailable."
+            "⚠️ OpenAI service is temporarily "
+            "unavailable."
         )
 
         st.info(
-            "BAITHAK WITH AI has switched to Demo Mode."
+            "BAITHAK WITH AI has switched "
+            "to Demo Mode."
         )
 
 
 # ============================================================
-# DEMO RESPONSE ENGINE
+# DEMO MODE
 # ============================================================
 
 def demo_response(prompt):
 
     text = prompt.lower().strip()
+
 
     if any(
         word in text
@@ -1365,9 +1409,9 @@ def demo_response(prompt):
     ):
 
         return (
-            "I am BAITHAK WITH AI 🤖, an AI assistant "
-            "designed to communicate with users through "
-            "text and voice."
+            "I am BAITHAK WITH AI 🤖, an AI "
+            "assistant designed to communicate "
+            "with users through text and voice."
         )
 
 
@@ -1377,21 +1421,20 @@ def demo_response(prompt):
     ):
 
         return (
-            "Artificial Intelligence (AI) is the field "
-            "of creating computer systems capable of "
-            "performing tasks that normally require "
-            "human intelligence, such as understanding "
-            "language, recognizing patterns and "
-            "making decisions."
+            "Artificial Intelligence is the field "
+            "of creating computer systems capable "
+            "of performing tasks that normally "
+            "require human intelligence."
         )
 
 
     if "python" in text:
 
         return (
-            "Python is a high-level programming language "
-            "widely used for AI, automation, data science, "
-            "robotics and web applications."
+            "Python is a high-level programming "
+            "language widely used for AI, automation, "
+            "data science, robotics and web "
+            "applications."
         )
 
 
@@ -1402,9 +1445,8 @@ def demo_response(prompt):
 
         return (
             "Robotics combines mechanical engineering, "
-            "electronics, sensors, control systems and "
-            "software to create machines capable of "
-            "sensing, deciding and acting."
+            "electronics, sensors, control systems "
+            "and software to create intelligent machines."
         )
 
 
@@ -1443,7 +1485,7 @@ def demo_response(prompt):
 
 
 # ============================================================
-# OPENAI TEXT GENERATION
+# OPENAI TEXT RESPONSE
 # ============================================================
 
 def ask_openai(prompt):
@@ -1469,6 +1511,7 @@ def ask_openai(prompt):
             "assistant",
         ]:
             continue
+
 
         conversation.append(
             {
@@ -1533,6 +1576,7 @@ def transcribe_audio(audio_file):
 
     audio_bytes = audio_file.getvalue()
 
+
     if not audio_bytes:
 
         raise RuntimeError(
@@ -1549,16 +1593,21 @@ def transcribe_audio(audio_file):
 
     extension = ".wav"
 
+
     if "webm" in mime_type:
+
         extension = ".webm"
 
     elif "ogg" in mime_type:
+
         extension = ".ogg"
 
     elif "mp4" in mime_type:
+
         extension = ".mp4"
 
     elif "mpeg" in mime_type:
+
         extension = ".mp3"
 
 
@@ -1572,9 +1621,13 @@ def transcribe_audio(audio_file):
             suffix=extension,
         ) as temp_file:
 
-            temp_file.write(audio_bytes)
+            temp_file.write(
+                audio_bytes
+            )
 
-            temp_path = temp_file.name
+            temp_path = (
+                temp_file.name
+            )
 
 
         with open(
@@ -1605,9 +1658,13 @@ def transcribe_audio(audio_file):
         if temp_path:
 
             try:
-                os.remove(temp_path)
+
+                os.remove(
+                    temp_path
+                )
 
             except Exception:
+
                 pass
 
 
@@ -1640,80 +1697,36 @@ def generate_speech(text):
 
 
 # ============================================================
-# HERO SECTION
+# PROPER STREAMLIT HEADER
 # ============================================================
 
-st.markdown(
-    """
-    <div style="
-        text-align:center;
-        padding:25px 10px 5px 10px;
-    ">
+st.title(
+    "🤖 BAITHAK WITH AI"
+)
 
-        <h1 style="
-            font-size:46px;
-            font-weight:900;
-            color:#034e6d;
-            letter-spacing:2px;
-            margin-bottom:5px;
-        ">
-            🤖 BAITHAK WITH AI
-        </h1>
+st.subheader(
+    "Your Intelligent Voice & Text AI Assistant"
+)
 
-        <p style="
-            font-size:20px;
-            color:#075477;
-            font-weight:650;
-        ">
-            Your Intelligent Voice & Text AI Assistant
-        </p>
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+st.caption(
+    "Speak naturally, type your question, "
+    "and interact with your AI assistant."
 )
 
 
 # ============================================================
-# ANIMATED ROBOT
+# ROBOT
 # ============================================================
 
 show_animated_robot()
 
 
 # ============================================================
-# INTRODUCTION
+# APPLICATION FLOW
 # ============================================================
 
-st.markdown(
-    """
-    <div style="
-        text-align:center;
-        margin-top:-20px;
-        margin-bottom:25px;
-    ">
-
-        <div style="
-            display:inline-block;
-            padding:12px 24px;
-            border-radius:30px;
-            background:rgba(0,70,100,0.10);
-            color:#075477;
-            font-size:18px;
-            font-weight:800;
-        ">
-
-            🎤 Speech
-            &nbsp; → &nbsp;
-            🧠 OpenAI
-            &nbsp; → &nbsp;
-            🔊 Voice
-
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+st.info(
+    "🎤 Speech → 🧠 OpenAI → 💬 AI Response → 🔊 Voice"
 )
 
 
@@ -1723,12 +1736,13 @@ st.markdown(
 
 with st.sidebar:
 
-    st.markdown(
-        "# 🤖 BAITHAK WITH AI"
+    st.header(
+        "🤖 BAITHAK WITH AI"
     )
 
-    st.markdown(
-        "### ⚙️ AI Configuration"
+
+    st.subheader(
+        "⚙️ AI Configuration"
     )
 
 
@@ -1783,6 +1797,7 @@ with st.sidebar:
                 "Demo Mode"
             )
 
+
     else:
 
         st.session_state.mode = (
@@ -1797,8 +1812,8 @@ with st.sidebar:
     st.divider()
 
 
-    st.markdown(
-        "### 📋 Current Status"
+    st.subheader(
+        "📋 Current Status"
     )
 
 
@@ -1838,10 +1853,13 @@ with st.sidebar:
     st.divider()
 
 
+    st.subheader(
+        "🎤 Voice Pipeline"
+    )
+
+
     st.markdown(
         """
-        ### 🎤 Voice Pipeline
-
         **Speech**
 
         ↓
@@ -1863,17 +1881,8 @@ with st.sidebar:
     )
 
 
-    st.divider()
-
-
-    st.caption(
-        "OpenAI is the external AI provider "
-        "used by this application."
-    )
-
-
 # ============================================================
-# CURRENT MODE BANNER
+# MODE STATUS
 # ============================================================
 
 if (
@@ -1896,32 +1905,19 @@ else:
 
 
 # ============================================================
-# VOICE ASSISTANT CARD
+# VOICE ASSISTANT
 # ============================================================
 
-st.markdown(
-    """
-    <div class="glass-card">
-
-        <div class="card-title">
-            🎤 Voice Assistant
-        </div>
-
-        <p>
-            Record your question using your microphone.
-            BAITHAK WITH AI will convert your speech
-            into text and generate an AI response.
-        </p>
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+st.header(
+    "🎤 Voice Assistant"
 )
 
+st.write(
+    "Record your question using your microphone. "
+    "BAITHAK WITH AI will convert your speech "
+    "into text and generate an AI response."
+)
 
-# ============================================================
-# AUDIO INPUT
-# ============================================================
 
 audio_input = st.audio_input(
     "🎤 Record your question"
@@ -1929,16 +1925,18 @@ audio_input = st.audio_input(
 
 
 # ============================================================
-# PROCESS VOICE
+# VOICE PROCESSING
 # ============================================================
 
 if audio_input is not None:
 
     st.audio(
         audio_input,
-        format=audio_input.type
-        if audio_input.type
-        else "audio/wav",
+        format=(
+            audio_input.type
+            if audio_input.type
+            else "audio/wav"
+        ),
     )
 
 
@@ -2002,10 +2000,6 @@ if audio_input is not None:
                                 transcript
                             )
 
-                            st.session_state.mode = (
-                                "OpenAI API Mode"
-                            )
-
                         except Exception as error:
 
                             show_openai_error(
@@ -2045,13 +2039,13 @@ if audio_input is not None:
 
 
 # ============================================================
-# CHAT HISTORY
+# CONVERSATION
 # ============================================================
 
 if st.session_state.messages:
 
-    st.markdown(
-        "## 💬 Conversation"
+    st.header(
+        "💬 Conversation"
     )
 
 
@@ -2095,8 +2089,13 @@ if st.session_state.messages:
 # TEXT CHAT
 # ============================================================
 
+st.header(
+    "💬 Text Chat"
+)
+
+
 prompt = st.chat_input(
-    "💬 Type your message here..."
+    "Type your message here..."
 )
 
 
@@ -2168,28 +2167,20 @@ if prompt:
 
 
 # ============================================================
-# AI VOICE RESPONSE
+# TEXT TO SPEECH
 # ============================================================
 
 if st.session_state.last_answer:
 
-    st.markdown(
-        """
-        <div class="glass-card">
+    st.header(
+        "🔊 AI Voice Response"
+    )
 
-            <div class="card-title">
-                🔊 AI Voice Response
-            </div>
 
-            <p>
-                Convert the latest AI response
-                into natural speech using
-                OpenAI Text-to-Speech.
-            </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.write(
+        "Convert the latest AI response "
+        "into natural speech using "
+        "OpenAI Text-to-Speech."
     )
 
 
@@ -2244,7 +2235,9 @@ if st.session_state.last_answer:
 
             label="⬇️ Download AI Voice",
 
-            data=st.session_state.voice_audio,
+            data=(
+                st.session_state.voice_audio
+            ),
 
             file_name=(
                 "baithak_ai_response.mp3"
@@ -2263,26 +2256,16 @@ if st.session_state.last_answer:
 current_year = datetime.now().year
 
 
+st.divider()
+
+
+st.caption(
+    f"BAITHAK WITH AI • OpenAI Powered • {current_year}"
+)
+
+
 st.markdown(
-    f"""
-    <div class="footer">
-
-        <strong>
-            Designed by Certified Generative and
-            Agentic AI Application Developer
-        </strong>
-
-        <br><br>
-
-        Engr. Bilal Mehmood
-
-        <br><br>
-
-        BAITHAK WITH AI
-        • OpenAI Powered
-        • {current_year}
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+    "**Designed by Certified Generative and "
+    "Agentic AI Application Developer — "
+    "Engr. Bilal Mehmood**"
 )
