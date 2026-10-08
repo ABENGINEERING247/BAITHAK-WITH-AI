@@ -1,4 +1,4 @@
-```python
+
 import os
 import tempfile
 import streamlit as st
@@ -1687,4 +1687,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-```
+
