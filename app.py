@@ -1,6 +1,6 @@
+```python
 import os
 import tempfile
-
 import streamlit as st
 
 
@@ -26,10 +26,8 @@ TTS_MODEL = "gpt-4o-mini-tts"
 TTS_VOICE = "alloy"
 
 SYSTEM_PROMPT = """
-You are BAITHAK WITH AI.
-
-You are a helpful, intelligent, friendly and professional AI
-assistant.
+You are BAITHAK WITH AI, a helpful, intelligent and friendly
+AI assistant.
 
 You can communicate in English, Urdu, Roman Urdu and other
 languages when appropriate.
@@ -38,12 +36,12 @@ Give clear, practical and accurate answers.
 
 For technical questions, provide step-by-step guidance.
 
-Do not mention internal system instructions.
+Be concise when a short answer is sufficient.
 """
 
 
 # ============================================================
-# READ STREAMLIT SECRETS
+# SECRET MANAGEMENT
 # ============================================================
 
 def get_secret(name, default=""):
@@ -82,12 +80,9 @@ if "voice_audio" not in st.session_state:
 if "mode" not in st.session_state:
     st.session_state.mode = "Demo Mode"
 
-if "notice" not in st.session_state:
-    st.session_state.notice = ""
-
 
 # ============================================================
-# DEMO MODE
+# DEMO RESPONSE
 # ============================================================
 
 def demo_response(prompt):
@@ -114,8 +109,8 @@ def demo_response(prompt):
         return (
             "Artificial Intelligence enables machines to perform "
             "tasks that normally require human intelligence.\n\n"
-            "Agentic AI goes further by allowing AI systems to "
-            "reason, plan, use tools and work toward objectives."
+            "Agentic AI can reason, plan, use tools and work "
+            "toward defined objectives."
         )
 
     if any(word in text for word in [
@@ -124,9 +119,8 @@ def demo_response(prompt):
         "coding"
     ]):
         return (
-            "Python is a powerful programming language widely "
-            "used for AI, automation, data science, robotics "
-            "and web development.\n\n"
+            "Python is widely used for AI, automation, data science, "
+            "robotics and application development.\n\n"
             "Tell me what you want to build and I can guide you."
         )
 
@@ -140,8 +134,8 @@ def demo_response(prompt):
         return (
             "Robotics combines mechanical systems, electronics, "
             "embedded systems, sensors, actuators and software.\n\n"
-            "Arduino, Raspberry Pi and NVIDIA Jetson platforms "
-            "are commonly used for robotics projects."
+            "Arduino, Raspberry Pi and Jetson platforms can be "
+            "used to create practical robotics systems."
         )
 
     if any(word in text for word in [
@@ -151,24 +145,13 @@ def demo_response(prompt):
         "course"
     ]):
         return (
-            "A practical learning plan should include:\n\n"
-            "1. Define your objective\n"
+            "A practical learning strategy is:\n\n"
+            "1. Define the objective\n"
             "2. Learn the fundamentals\n"
-            "3. Practice regularly\n"
-            "4. Build a practical project\n"
+            "3. Practice\n"
+            "4. Build a project\n"
             "5. Review and improve\n\n"
             "Tell me your subject and I can create a study plan."
-        )
-
-    if any(word in text for word in [
-        "career",
-        "job",
-        "professional"
-    ]):
-        return (
-            "A strong professional development plan includes "
-            "clear goals, relevant technical skills, practical "
-            "projects, communication skills and continuous learning."
         )
 
     return (
@@ -188,7 +171,6 @@ def create_openai_client():
         return None
 
     try:
-
         from openai import OpenAI
 
         return OpenAI(
@@ -202,7 +184,7 @@ def create_openai_client():
 
 
 # ============================================================
-# OPENAI ERROR CLASSIFICATION
+# ERROR CLASSIFICATION
 # ============================================================
 
 def classify_openai_error(error):
@@ -265,7 +247,7 @@ def classify_openai_error(error):
 
 
 # ============================================================
-# FRIENDLY ERROR MESSAGE
+# FRIENDLY ERROR HANDLING
 # ============================================================
 
 def show_openai_error(error_type):
@@ -285,8 +267,7 @@ def show_openai_error(error_type):
         st.warning(message)
 
         st.info(
-            "Please add OPENAI_API_KEY in "
-            "Streamlit Secrets."
+            "Add OPENAI_API_KEY to your Streamlit Secrets."
         )
 
     elif error_type == "quota":
@@ -301,9 +282,7 @@ def show_openai_error(error_type):
             icon="⚠️"
         )
 
-        st.warning(
-            message
-        )
+        st.warning(message)
 
         st.info(
             "OpenAI API credits are exhausted or unavailable. "
@@ -319,7 +298,7 @@ def show_openai_error(error_type):
         )
 
         st.warning(
-            "The OpenAI API key could not be authenticated. "
+            "OpenAI authentication failed. "
             "Please check OPENAI_API_KEY in Streamlit Secrets."
         )
 
@@ -332,7 +311,7 @@ def show_openai_error(error_type):
 
         st.warning(
             "The configured OpenAI model is unavailable "
-            "for this API account."
+            "for this account."
         )
 
     elif error_type == "rate_limit":
@@ -368,7 +347,6 @@ def ask_openai(user_prompt):
     client = create_openai_client()
 
     if client is None:
-
         return None, "missing_key"
 
     try:
@@ -400,7 +378,6 @@ def ask_openai(user_prompt):
         )
 
         if not answer:
-
             return None, "api_error"
 
         return answer.strip(), None
@@ -419,7 +396,6 @@ def transcribe_audio(audio_file):
     client = create_openai_client()
 
     if client is None:
-
         return None, "missing_key"
 
     temporary_file = None
@@ -453,7 +429,6 @@ def transcribe_audio(audio_file):
         )
 
         if not transcript:
-
             return None, "api_error"
 
         return transcript.strip(), None
@@ -481,7 +456,6 @@ def generate_speech(text):
     client = create_openai_client()
 
     if client is None:
-
         return None, "missing_key"
 
     try:
@@ -495,7 +469,6 @@ def generate_speech(text):
         audio_data = response.read()
 
         if not audio_data:
-
             return None, "api_error"
 
         return audio_data, None
@@ -506,86 +479,737 @@ def generate_speech(text):
 
 
 # ============================================================
-# CUSTOM CSS
+# SKY BLUE UI
 # ============================================================
 
 st.markdown(
     """
     <style>
 
-    .main-title {
-        text-align: center;
-        font-size: clamp(2rem, 5vw, 3.5rem);
-        font-weight: 900;
-        letter-spacing: 1px;
-        margin-bottom: 0;
+    /* =====================================================
+       GLOBAL SKY BLUE THEME
+       ===================================================== */
+
+    .stApp {
+
+        background:
+            linear-gradient(
+                135deg,
+                #eaf9ff 0%,
+                #d9f3ff 35%,
+                #c4edff 70%,
+                #b3e7ff 100%
+            );
+
+        color: #06324a;
+
     }
+
+
+    /* =====================================================
+       SIDEBAR
+       ===================================================== */
+
+    section[data-testid="stSidebar"] {
+
+        background:
+            linear-gradient(
+                180deg,
+                #d8f5ff 0%,
+                #bceaff 100%
+            );
+
+        border-right:
+            2px solid rgba(0, 153, 204, 0.20);
+
+    }
+
+
+    /* =====================================================
+       MAIN TITLE
+       ===================================================== */
+
+    .main-title {
+
+        text-align: center;
+
+        font-size:
+            clamp(2.2rem, 5vw, 4rem);
+
+        font-weight: 900;
+
+        letter-spacing: 2px;
+
+        color: #005b82;
+
+        text-shadow:
+            0 3px 12px
+            rgba(0, 126, 170, 0.20);
+
+        margin-top: 5px;
+
+        margin-bottom: 0;
+
+    }
+
 
     .subtitle {
+
         text-align: center;
-        font-size: 1.05rem;
-        opacity: 0.78;
-        margin-top: 5px;
-        margin-bottom: 20px;
+
+        font-size: 1.10rem;
+
+        font-weight: 600;
+
+        color: #176b8d;
+
+        margin-top: 4px;
+
+        margin-bottom: 25px;
+
     }
+
+
+    /* =====================================================
+       ROBOT HERO
+       ===================================================== */
 
     .robot-box {
-        border-radius: 25px;
-        padding: 28px;
+
+        position: relative;
+
+        overflow: hidden;
+
+        border-radius: 32px;
+
+        padding: 35px 20px 30px;
+
         text-align: center;
-        background: linear-gradient(
-            135deg,
-            #0b172a,
-            #123e62
-        );
+
+        background:
+            linear-gradient(
+                135deg,
+                #62d5ff 0%,
+                #36bff0 45%,
+                #159bd0 100%
+            );
+
         color: white;
-        margin-bottom: 22px;
+
+        border:
+            2px solid
+            rgba(255,255,255,0.65);
+
         box-shadow:
-            0 10px 30px rgba(0, 0, 0, 0.20);
+            0 18px 45px
+            rgba(0, 126, 170, 0.25);
+
+        margin-bottom: 25px;
+
     }
 
-    .robot {
-        font-size: 105px;
-        display: inline-block;
-        animation: robotFloat 2.5s ease-in-out infinite;
+
+    /* Animated light circles */
+
+    .robot-box::before {
+
+        content: "";
+
+        position: absolute;
+
+        width: 220px;
+        height: 220px;
+
+        border-radius: 50%;
+
+        background:
+            rgba(255,255,255,0.15);
+
+        top: -100px;
+        left: -70px;
+
+        animation:
+            bubbleMove 7s infinite ease-in-out;
+
     }
+
+
+    .robot-box::after {
+
+        content: "";
+
+        position: absolute;
+
+        width: 180px;
+        height: 180px;
+
+        border-radius: 50%;
+
+        background:
+            rgba(255,255,255,0.12);
+
+        right: -60px;
+        bottom: -90px;
+
+        animation:
+            bubbleMove2 6s infinite ease-in-out;
+
+    }
+
+
+    @keyframes bubbleMove {
+
+        0%, 100% {
+            transform: translate(0, 0);
+        }
+
+        50% {
+            transform: translate(80px, 40px);
+        }
+
+    }
+
+
+    @keyframes bubbleMove2 {
+
+        0%, 100% {
+            transform: translate(0, 0);
+        }
+
+        50% {
+            transform: translate(-50px, -30px);
+        }
+
+    }
+
+
+    /* =====================================================
+       ANIMATED ROBOT
+       ===================================================== */
+
+    .robot-stage {
+
+        position: relative;
+
+        display: inline-block;
+
+        width: 180px;
+
+        height: 190px;
+
+        z-index: 5;
+
+        animation:
+            robotFloat 3s ease-in-out infinite;
+
+    }
+
+
+    .robot-head {
+
+        position: absolute;
+
+        width: 125px;
+
+        height: 105px;
+
+        left: 27px;
+
+        top: 15px;
+
+        border-radius: 35px;
+
+        background:
+            linear-gradient(
+                145deg,
+                #ffffff,
+                #dcefff
+            );
+
+        border:
+            5px solid #087da8;
+
+        box-shadow:
+            inset 0 -8px 15px
+            rgba(0, 100, 140, 0.12),
+
+            0 10px 30px
+            rgba(0, 77, 110, 0.30);
+
+    }
+
+
+    .robot-eye {
+
+        position: absolute;
+
+        width: 22px;
+        height: 30px;
+
+        top: 37px;
+
+        border-radius: 50%;
+
+        background:
+            #00bfff;
+
+        box-shadow:
+            0 0 12px #00eaff,
+            0 0 25px #00d9ff;
+
+        animation:
+            eyeBlink 4s infinite;
+
+    }
+
+
+    .robot-eye.left {
+
+        left: 28px;
+
+    }
+
+
+    .robot-eye.right {
+
+        right: 28px;
+
+    }
+
+
+    .robot-mouth {
+
+        position: absolute;
+
+        width: 48px;
+
+        height: 18px;
+
+        left: 34px;
+
+        bottom: 17px;
+
+        border-bottom:
+            5px solid #087da8;
+
+        border-radius:
+            0 0 30px 30px;
+
+    }
+
+
+    .robot-ear {
+
+        position: absolute;
+
+        width: 18px;
+        height: 42px;
+
+        top: 46px;
+
+        border-radius: 10px;
+
+        background: #079aca;
+
+        border: 3px solid #087da8;
+
+    }
+
+
+    .robot-ear.left {
+
+        left: 8px;
+
+    }
+
+
+    .robot-ear.right {
+
+        right: 8px;
+
+    }
+
+
+    .robot-antenna {
+
+        position: absolute;
+
+        width: 6px;
+
+        height: 30px;
+
+        background: #087da8;
+
+        left: 88px;
+
+        top: -13px;
+
+        border-radius: 5px;
+
+    }
+
+
+    .robot-light {
+
+        position: absolute;
+
+        width: 15px;
+        height: 15px;
+
+        left: 83px;
+
+        top: -25px;
+
+        border-radius: 50%;
+
+        background: #ffffff;
+
+        box-shadow:
+            0 0 10px #ffffff,
+            0 0 25px #00eaff;
+
+        animation:
+            lightPulse 1.2s infinite;
+
+    }
+
+
+    .robot-body {
+
+        position: absolute;
+
+        width: 105px;
+
+        height: 65px;
+
+        left: 37px;
+
+        top: 116px;
+
+        border-radius: 28px 28px 20px 20px;
+
+        background:
+            linear-gradient(
+                145deg,
+                #f7fdff,
+                #c9eaff
+            );
+
+        border:
+            5px solid #087da8;
+
+        box-shadow:
+            0 10px 25px
+            rgba(0, 77, 110, 0.25);
+
+    }
+
+
+    .robot-panel {
+
+        position: absolute;
+
+        width: 45px;
+
+        height: 25px;
+
+        left: 25px;
+
+        top: 15px;
+
+        border-radius: 8px;
+
+        background: #0b9dcc;
+
+        border: 2px solid #066986;
+
+    }
+
+
+    .robot-dot {
+
+        display: inline-block;
+
+        width: 7px;
+
+        height: 7px;
+
+        margin: 7px 2px;
+
+        border-radius: 50%;
+
+        background: #8ff5ff;
+
+        animation:
+            dotPulse 1s infinite alternate;
+
+    }
+
+
+    .robot-arm {
+
+        position: absolute;
+
+        width: 16px;
+
+        height: 55px;
+
+        top: 121px;
+
+        border-radius: 10px;
+
+        background: #d9f2ff;
+
+        border: 4px solid #087da8;
+
+    }
+
+
+    .robot-arm.left {
+
+        left: 18px;
+
+        transform:
+            rotate(20deg);
+
+        animation:
+            leftArm 2.5s infinite ease-in-out;
+
+    }
+
+
+    .robot-arm.right {
+
+        right: 18px;
+
+        transform:
+            rotate(-20deg);
+
+        animation:
+            rightArm 2.5s infinite ease-in-out;
+
+    }
+
 
     @keyframes robotFloat {
 
         0%, 100% {
-            transform: translateY(0);
+            transform: translateY(0px);
         }
 
         50% {
-            transform: translateY(-14px);
+            transform: translateY(-15px);
         }
+
     }
+
+
+    @keyframes eyeBlink {
+
+        0%, 44%, 48%, 100% {
+            transform: scaleY(1);
+        }
+
+        46% {
+            transform: scaleY(0.12);
+        }
+
+    }
+
+
+    @keyframes lightPulse {
+
+        0%, 100% {
+            opacity: 0.5;
+            transform: scale(0.8);
+        }
+
+        50% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+    }
+
+
+    @keyframes dotPulse {
+
+        from {
+            opacity: 0.3;
+        }
+
+        to {
+            opacity: 1;
+        }
+
+    }
+
+
+    @keyframes leftArm {
+
+        0%, 100% {
+            transform: rotate(20deg);
+        }
+
+        50% {
+            transform: rotate(5deg);
+        }
+
+    }
+
+
+    @keyframes rightArm {
+
+        0%, 100% {
+            transform: rotate(-20deg);
+        }
+
+        50% {
+            transform: rotate(-5deg);
+        }
+
+    }
+
+
+    /* =====================================================
+       HERO TEXT
+       ===================================================== */
+
+    .hero-heading {
+
+        position: relative;
+
+        z-index: 10;
+
+        font-size: 2rem;
+
+        font-weight: 900;
+
+        margin-top: 10px;
+
+        text-shadow:
+            0 2px 5px
+            rgba(0, 70, 100, 0.20);
+
+    }
+
+
+    .hero-text {
+
+        position: relative;
+
+        z-index: 10;
+
+        font-size: 1.05rem;
+
+        font-weight: 600;
+
+        margin: 6px;
+
+    }
+
+
+    .flow-text {
+
+        position: relative;
+
+        z-index: 10;
+
+        display: inline-block;
+
+        padding: 10px 18px;
+
+        border-radius: 50px;
+
+        background:
+            rgba(255,255,255,0.18);
+
+        border:
+            1px solid
+            rgba(255,255,255,0.45);
+
+        font-weight: 800;
+
+        margin-top: 10px;
+
+    }
+
+
+    /* =====================================================
+       VOICE SECTION
+       ===================================================== */
+
+    .voice-card {
+
+        padding: 18px;
+
+        border-radius: 20px;
+
+        background:
+            rgba(255,255,255,0.65);
+
+        border:
+            1px solid
+            rgba(0, 130, 180, 0.18);
+
+        box-shadow:
+            0 8px 25px
+            rgba(0, 120, 170, 0.10);
+
+        margin-bottom: 18px;
+
+    }
+
 
     .voice-title {
+
         text-align: center;
-        font-size: 1.45rem;
-        font-weight: 800;
-        margin-top: 10px;
+
+        font-size: 1.5rem;
+
+        font-weight: 900;
+
+        color: #005b82;
+
     }
 
-    .status-card {
-        padding: 14px;
-        border-radius: 15px;
-        background: rgba(128,128,128,0.10);
-        text-align: center;
-        margin: 10px 0;
+
+    /* =====================================================
+       BUTTONS
+       ===================================================== */
+
+    .stButton > button {
+
+        border-radius: 14px !important;
+
+        font-weight: 700 !important;
+
+        border:
+            1px solid
+            rgba(0, 126, 170, 0.25) !important;
+
     }
+
+
+    /* =====================================================
+       FOOTER
+       ===================================================== */
 
     .footer {
+
         text-align: center;
-        opacity: 0.80;
-        padding: 30px 5px 10px 5px;
-        font-size: 0.9rem;
+
+        color: #075b7c;
+
+        padding: 35px 5px 15px;
+
+        font-size: 0.92rem;
+
     }
 
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
@@ -612,10 +1236,10 @@ st.markdown(
 
 with st.sidebar:
 
-    st.header("⚙️ BAITHAK Settings")
+    st.header("⚙️ BAITHAK SETTINGS")
 
     st.session_state.mode = st.radio(
-        "Select Mode",
+        "AI Mode",
         [
             "Demo Mode",
             "OpenAI API Mode"
@@ -645,8 +1269,8 @@ with st.sidebar:
         )
 
     st.caption(
-        "BAITHAK WITH AI uses OpenAI only for "
-        "AI, speech-to-text and text-to-speech."
+        "Only OpenAI is used for AI, "
+        "speech-to-text and text-to-speech."
     )
 
     st.divider()
@@ -664,26 +1288,62 @@ with st.sidebar:
 
 
 # ============================================================
-# ROBOT
+# ANIMATED ROBOT HERO
 # ============================================================
 
 st.markdown(
     """
     <div class="robot-box">
 
-        <div class="robot">
-            🤖
+        <div class="robot-stage">
+
+            <div class="robot-antenna"></div>
+            <div class="robot-light"></div>
+
+            <div class="robot-ear left"></div>
+            <div class="robot-ear right"></div>
+
+            <div class="robot-head">
+
+                <div class="robot-eye left"></div>
+                <div class="robot-eye right"></div>
+
+                <div class="robot-mouth"></div>
+
+            </div>
+
+            <div class="robot-arm left"></div>
+            <div class="robot-arm right"></div>
+
+            <div class="robot-body">
+
+                <div class="robot-panel">
+
+                    <span class="robot-dot"></span>
+                    <span class="robot-dot"></span>
+                    <span class="robot-dot"></span>
+
+                </div>
+
+            </div>
+
         </div>
 
-        <h2>BAITHAK WITH AI</h2>
+        <div class="hero-heading">
+            BAITHAK WITH AI
+        </div>
 
-        <p>
+        <div class="hero-text">
             Speak naturally or type your question.
-        </p>
+        </div>
 
-        <p>
-            🎤 Speech → 🧠 OpenAI → 🔊 Voice
-        </p>
+        <div class="flow-text">
+            🎤 Speech
+            &nbsp;→&nbsp;
+            🧠 OpenAI
+            &nbsp;→&nbsp;
+            🔊 Voice
+        </div>
 
     </div>
     """,
@@ -696,15 +1356,21 @@ st.markdown(
 # ============================================================
 
 st.markdown(
-    '<div class="voice-title">'
-    '🎤 Voice Assistant'
-    '</div>',
+    """
+    <div class="voice-card">
+
+        <div class="voice-title">
+            🎤 TALK TO BAITHAK
+        </div>
+
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
 st.caption(
     "Press the microphone button, record your question, "
-    "then click Convert Speech to Text."
+    "then convert your speech using OpenAI."
 )
 
 audio_input = st.audio_input(
@@ -762,7 +1428,6 @@ if audio_input is not None:
                     transcript
                 )
 
-                # Add user message
                 st.session_state.messages.append({
                     "role": "user",
                     "content": transcript
@@ -879,7 +1544,7 @@ if user_prompt:
 
 
 # ============================================================
-# CONVERSATION DISPLAY
+# CONVERSATION
 # ============================================================
 
 if st.session_state.messages:
@@ -910,7 +1575,7 @@ if st.session_state.last_answer:
     st.divider()
 
     st.subheader(
-        "🔊 AI Voice Response"
+        "🔊 AI VOICE RESPONSE"
     )
 
     if st.button(
@@ -928,7 +1593,7 @@ if st.session_state.last_answer:
         else:
 
             with st.spinner(
-                "🔊 OpenAI is generating the voice..."
+                "🔊 OpenAI is generating voice..."
             ):
 
                 audio_data, error_type = (
@@ -950,7 +1615,7 @@ if st.session_state.last_answer:
                 )
 
                 st.success(
-                    "✅ OpenAI voice generated."
+                    "✅ OpenAI voice generated successfully."
                 )
 
     if st.session_state.voice_audio:
@@ -974,18 +1639,18 @@ if st.session_state.last_answer:
 # ============================================================
 
 with st.expander(
-    "🔐 OpenAI Streamlit Secrets"
+    "🔐 OPENAI STREAMLIT SECRETS"
 ):
 
     st.markdown(
         """
-        ### Add only these OpenAI settings
+        ### Use only OpenAI credentials
 
         Go to:
 
-        **Streamlit → App Settings → Secrets**
+        **Streamlit → App → Settings → Secrets**
 
-        Then add:
+        Add:
         """
     )
 
@@ -995,8 +1660,9 @@ with st.expander(
         language="toml"
     )
 
-    st.info(
-        "No Google API key is required."
+    st.success(
+        "Google API is completely removed. "
+        "Only OpenAI is used."
     )
 
 
@@ -1021,3 +1687,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+```
