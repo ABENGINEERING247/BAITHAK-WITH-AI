@@ -1,6 +1,8 @@
+```python
 import os
 import base64
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 
 
@@ -21,9 +23,9 @@ st.set_page_config(
 # CONFIGURATION
 # ============================================================
 
-DEFAULT_MODEL = "gpt-6-luna"
-TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
-VOICE_MODEL = "gpt-4o-mini-tts"
+DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
+DEFAULT_VOICE_MODEL = "gpt-4o-mini-tts"
 
 SYSTEM_PROMPT = """
 You are BAITHAK WITH AI.
@@ -57,11 +59,10 @@ application actually performed it.
 
 
 # ============================================================
-# OPENAI API KEY
+# SECRET / ENVIRONMENT VARIABLE
 # ============================================================
 
 def get_secret(name, default=""):
-
     try:
         value = st.secrets.get(name)
 
@@ -83,12 +84,12 @@ OPENAI_MODEL = get_secret(
 
 TRANSCRIPTION_MODEL = get_secret(
     "TRANSCRIPTION_MODEL",
-    TRANSCRIPTION_MODEL
+    DEFAULT_TRANSCRIPTION_MODEL
 )
 
 VOICE_MODEL = get_secret(
     "VOICE_MODEL",
-    VOICE_MODEL
+    DEFAULT_VOICE_MODEL
 )
 
 
@@ -101,13 +102,11 @@ client = None
 if OPENAI_API_KEY:
 
     try:
-
         client = OpenAI(
             api_key=OPENAI_API_KEY
         )
 
     except Exception:
-
         client = None
 
 
@@ -116,27 +115,20 @@ if OPENAI_API_KEY:
 # ============================================================
 
 if "conversation" not in st.session_state:
-
     st.session_state.conversation = []
 
-
 if "last_answer" not in st.session_state:
-
     st.session_state.last_answer = ""
 
-
 if "last_audio" not in st.session_state:
-
     st.session_state.last_audio = None
 
-
 if "api_error" not in st.session_state:
-
     st.session_state.api_error = ""
 
 
 # ============================================================
-# CSS
+# GLOBAL CSS
 # ============================================================
 
 st.markdown(
@@ -144,22 +136,14 @@ st.markdown(
 <style>
 
 @import url(
-'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap'
+    'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap'
 );
-
-
-/* ==========================================================
-   GLOBAL
-   ========================================================== */
 
 html,
 body,
 [class*="css"] {
-
     font-family: 'Orbitron', sans-serif;
-
 }
-
 
 .stApp {
 
@@ -179,7 +163,6 @@ body,
         #030712;
 
     color: white;
-
 }
 
 
@@ -205,7 +188,6 @@ body,
         0 0 55px rgba(0,234,255,.55);
 
     margin-top: 5px;
-
 }
 
 
@@ -220,524 +202,6 @@ body,
     color: #9beafa;
 
     margin-bottom: 25px;
-
-}
-
-
-/* ==========================================================
-   ROBOT STAGE
-   ========================================================== */
-
-.robot-container {
-
-    position: relative;
-
-    min-height: 470px;
-
-    display: flex;
-
-    justify-content: center;
-
-    align-items: center;
-
-}
-
-
-.robot-glow {
-
-    position: absolute;
-
-    width: 330px;
-
-    height: 330px;
-
-    border-radius: 50%;
-
-    background:
-        radial-gradient(
-            circle,
-            rgba(0,225,255,.25),
-            rgba(0,225,255,.05) 50%,
-            transparent 72%
-        );
-
-    animation: glowPulse 2.5s ease-in-out infinite;
-
-}
-
-
-@keyframes glowPulse {
-
-    0%,100% {
-
-        transform: scale(.90);
-
-        opacity: .55;
-
-    }
-
-    50% {
-
-        transform: scale(1.12);
-
-        opacity: 1;
-
-    }
-
-}
-
-
-/* ==========================================================
-   ROBOT
-   ========================================================== */
-
-.robot {
-
-    width: 270px;
-
-    height: 380px;
-
-    position: relative;
-
-    z-index: 2;
-
-    animation: robotFloat 3s ease-in-out infinite;
-
-}
-
-
-@keyframes robotFloat {
-
-    0%,100% {
-
-        transform: translateY(0px);
-
-    }
-
-    50% {
-
-        transform: translateY(-17px);
-
-    }
-
-}
-
-
-/* ==========================================================
-   ANTENNA
-   ========================================================== */
-
-.antenna {
-
-    position: absolute;
-
-    top: -52px;
-
-    left: 131px;
-
-    width: 7px;
-
-    height: 52px;
-
-    background: #bdf8ff;
-
-    box-shadow: 0 0 15px #00eaff;
-
-}
-
-
-.antenna-light {
-
-    position: absolute;
-
-    top: -77px;
-
-    left: 120px;
-
-    width: 28px;
-
-    height: 28px;
-
-    border-radius: 50%;
-
-    background: #00ffae;
-
-    box-shadow:
-        0 0 10px #00ffae,
-        0 0 30px #00ffae;
-
-    animation: antennaPulse 1.2s infinite;
-
-}
-
-
-@keyframes antennaPulse {
-
-    0%,100% {
-
-        transform: scale(.75);
-
-    }
-
-    50% {
-
-        transform: scale(1.2);
-
-    }
-
-}
-
-
-/* ==========================================================
-   ROBOT HEAD
-   ========================================================== */
-
-.robot-head {
-
-    position: absolute;
-
-    top: 0;
-
-    left: 30px;
-
-    width: 215px;
-
-    height: 165px;
-
-    border-radius: 45px;
-
-    background:
-        linear-gradient(
-            145deg,
-            #eefaff,
-            #72869b
-        );
-
-    border: 5px solid #a5f4ff;
-
-    box-shadow:
-        0 0 18px #00eaff,
-        0 0 45px rgba(0,234,255,.7),
-        inset 0 0 25px rgba(255,255,255,.45);
-
-}
-
-
-/* ==========================================================
-   FACE SCREEN
-   ========================================================== */
-
-.face-screen {
-
-    position: absolute;
-
-    left: 30px;
-
-    top: 35px;
-
-    width: 150px;
-
-    height: 90px;
-
-    border-radius: 27px;
-
-    background: #020a13;
-
-    border: 3px solid #00eaff;
-
-    box-shadow:
-        inset 0 0 25px #00eaff,
-        0 0 15px rgba(0,234,255,.5);
-
-}
-
-
-/* ==========================================================
-   EYES
-   ========================================================== */
-
-.eye {
-
-    position: absolute;
-
-    top: 18px;
-
-    width: 28px;
-
-    height: 38px;
-
-    border-radius: 50%;
-
-    background: #00f6ff;
-
-    box-shadow:
-        0 0 12px #00f6ff,
-        0 0 25px #00f6ff;
-
-    animation: blink 4s infinite;
-
-}
-
-
-.eye-left {
-
-    left: 28px;
-
-}
-
-
-.eye-right {
-
-    right: 28px;
-
-}
-
-
-@keyframes blink {
-
-    0%,90%,100% {
-
-        transform: scaleY(1);
-
-    }
-
-    94% {
-
-        transform: scaleY(.08);
-
-    }
-
-}
-
-
-/* ==========================================================
-   MOUTH
-   ========================================================== */
-
-.mouth {
-
-    position: absolute;
-
-    left: 58px;
-
-    bottom: 10px;
-
-    width: 34px;
-
-    height: 8px;
-
-    border-radius: 20px;
-
-    background: #00f6ff;
-
-    box-shadow: 0 0 14px #00f6ff;
-
-    animation: robotTalk 0.9s infinite;
-
-}
-
-
-@keyframes robotTalk {
-
-    0%,100% {
-
-        height: 7px;
-
-        width: 34px;
-
-    }
-
-    50% {
-
-        height: 22px;
-
-        width: 28px;
-
-    }
-
-}
-
-
-/* ==========================================================
-   ROBOT BODY
-   ========================================================== */
-
-.robot-body {
-
-    position: absolute;
-
-    top: 175px;
-
-    left: 62px;
-
-    width: 145px;
-
-    height: 130px;
-
-    border-radius: 30px;
-
-    background:
-        linear-gradient(
-            145deg,
-            #e8f7ff,
-            #61758b
-        );
-
-    border: 5px solid #a5f4ff;
-
-    box-shadow:
-        0 0 20px #00eaff,
-        inset 0 0 20px rgba(255,255,255,.3);
-
-}
-
-
-/* ==========================================================
-   CHEST
-   ========================================================== */
-
-.chest {
-
-    position: absolute;
-
-    top: 29px;
-
-    left: 28px;
-
-    width: 84px;
-
-    height: 62px;
-
-    border-radius: 15px;
-
-    background: #020a13;
-
-    border: 3px solid #00eaff;
-
-    box-shadow: inset 0 0 20px #00eaff;
-
-}
-
-
-.chest-core {
-
-    position: absolute;
-
-    left: 31px;
-
-    top: 18px;
-
-    width: 18px;
-
-    height: 18px;
-
-    border-radius: 50%;
-
-    background: #00ffae;
-
-    box-shadow:
-        0 0 12px #00ffae,
-        0 0 28px #00ffae;
-
-    animation: corePulse 1.2s infinite;
-
-}
-
-
-@keyframes corePulse {
-
-    0%,100% {
-
-        transform: scale(.75);
-
-    }
-
-    50% {
-
-        transform: scale(1.2);
-
-    }
-
-}
-
-
-/* ==========================================================
-   ROBOT ARMS
-   ========================================================== */
-
-.arm {
-
-    position: absolute;
-
-    top: 180px;
-
-    width: 38px;
-
-    height: 110px;
-
-    border-radius: 25px;
-
-    background:
-        linear-gradient(
-            #b5cadb,
-            #52667a
-        );
-
-    border: 4px solid #a5f4ff;
-
-    box-shadow: 0 0 15px #00eaff;
-
-}
-
-
-.arm-left {
-
-    left: 16px;
-
-    transform: rotate(12deg);
-
-}
-
-
-.arm-right {
-
-    right: 16px;
-
-    transform: rotate(-12deg);
-
-}
-
-
-/* ==========================================================
-   STATUS
-   ========================================================== */
-
-.robot-status {
-
-    text-align: center;
-
-    margin-top: -20px;
-
-}
-
-
-.status-pill {
-
-    display: inline-block;
-
-    padding: 10px 25px;
-
-    border-radius: 30px;
-
-    color: #00eaff;
-
-    border: 1px solid #00eaff;
-
-    background: rgba(0,234,255,.08);
-
-    box-shadow:
-        0 0 20px rgba(0,234,255,.25);
-
 }
 
 
@@ -778,7 +242,6 @@ body,
             rgba(0,234,255,.02),
             rgba(0,234,255,.08)
         );
-
 }
 
 
@@ -792,8 +255,8 @@ body,
 
     color: #00eaff;
 
-    text-shadow: 0 0 10px rgba(0,234,255,.6);
-
+    text-shadow:
+        0 0 10px rgba(0,234,255,.6);
 }
 
 
@@ -806,7 +269,6 @@ body,
     font-weight: 800;
 
     color: white;
-
 }
 
 
@@ -819,7 +281,6 @@ body,
     color: #7fa0b3;
 
     letter-spacing: 1px;
-
 }
 
 
@@ -830,9 +291,7 @@ body,
     color: #00ffae;
 
     font-size: 12px;
-
 }
-
 
 </style>
 """,
@@ -853,14 +312,15 @@ def ask_ai(user_text):
             "Please add OPENAI_API_KEY to Streamlit Secrets."
         )
 
+    user_message = {
+        "role": "user",
+        "content": user_text
+    }
+
     st.session_state.conversation.append(
-        {
-            "role": "user",
-            "content": user_text
-        }
+        user_message
     )
 
-    # Keep recent history manageable
     history = st.session_state.conversation[-20:]
 
     try:
@@ -874,8 +334,9 @@ def ask_ai(user_text):
         answer = response.output_text
 
         if not answer:
-
-            answer = "Sorry, I could not generate a response."
+            answer = (
+                "Sorry, I could not generate a response."
+            )
 
         st.session_state.conversation.append(
             {
@@ -890,23 +351,29 @@ def ask_ai(user_text):
 
     except Exception as error:
 
-        # Remove failed user message
         if st.session_state.conversation:
 
-            if st.session_state.conversation[-1]["role"] == "user":
-
+            if (
+                st.session_state.conversation[-1]["role"]
+                == "user"
+            ):
                 st.session_state.conversation.pop()
+
+        st.session_state.api_error = str(error)
 
         return (
             "⚠️ OpenAI request failed.\n\n"
-            + str(error)
+            f"{error}"
         )
 
+
+# ============================================================
+# SPEECH TO TEXT
+# ============================================================
 
 def transcribe_audio(audio_file):
 
     if client is None:
-
         return None, "OpenAI is not connected."
 
     try:
@@ -925,7 +392,6 @@ def transcribe_audio(audio_file):
         )
 
         if not text:
-
             return None, "No speech was detected."
 
         return text.strip(), None
@@ -935,10 +401,13 @@ def transcribe_audio(audio_file):
         return None, str(error)
 
 
+# ============================================================
+# TEXT TO SPEECH
+# ============================================================
+
 def create_voice(text):
 
     if client is None:
-
         return None, "OpenAI is not connected."
 
     try:
@@ -959,6 +428,10 @@ def create_voice(text):
         return None, str(error)
 
 
+# ============================================================
+# AUDIO PLAYER
+# ============================================================
+
 def make_audio_player(audio_bytes):
 
     encoded = base64.b64encode(
@@ -973,6 +446,622 @@ def make_audio_player(audio_bytes):
         >
     </audio>
     """
+
+
+# ============================================================
+# ROBOT HTML
+# ============================================================
+
+def render_robot():
+
+    robot_html = r"""
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+    background: transparent;
+
+    overflow: hidden;
+}
+
+
+/* ============================================================
+   ROBOT STAGE
+   ============================================================ */
+
+.robot-container {
+
+    position: relative;
+
+    width: 100%;
+
+    height: 490px;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+}
+
+
+/* ============================================================
+   GLOW
+   ============================================================ */
+
+.robot-glow {
+
+    position: absolute;
+
+    width: 330px;
+
+    height: 330px;
+
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(0,225,255,0.28),
+            rgba(0,225,255,0.08) 50%,
+            transparent 72%
+        );
+
+    animation: glowPulse 2.5s ease-in-out infinite;
+
+    z-index: 1;
+}
+
+
+@keyframes glowPulse {
+
+    0%,
+    100% {
+
+        transform: scale(0.90);
+
+        opacity: 0.55;
+    }
+
+    50% {
+
+        transform: scale(1.12);
+
+        opacity: 1;
+    }
+}
+
+
+/* ============================================================
+   ROBOT
+   ============================================================ */
+
+.robot {
+
+    position: relative;
+
+    width: 270px;
+
+    height: 380px;
+
+    z-index: 5;
+
+    animation: robotFloat 3s ease-in-out infinite;
+}
+
+
+@keyframes robotFloat {
+
+    0%,
+    100% {
+
+        transform: translateY(0px);
+    }
+
+    50% {
+
+        transform: translateY(-17px);
+    }
+}
+
+
+/* ============================================================
+   ANTENNA
+   ============================================================ */
+
+.antenna {
+
+    position: absolute;
+
+    top: -52px;
+
+    left: 131px;
+
+    width: 7px;
+
+    height: 52px;
+
+    background: #bdf8ff;
+
+    border-radius: 5px;
+
+    box-shadow:
+        0 0 15px #00eaff;
+}
+
+
+.antenna-light {
+
+    position: absolute;
+
+    top: -77px;
+
+    left: 120px;
+
+    width: 28px;
+
+    height: 28px;
+
+    border-radius: 50%;
+
+    background: #00ffae;
+
+    box-shadow:
+        0 0 10px #00ffae,
+        0 0 30px #00ffae;
+
+    animation: antennaPulse 1.2s infinite;
+}
+
+
+@keyframes antennaPulse {
+
+    0%,
+    100% {
+
+        transform: scale(0.75);
+    }
+
+    50% {
+
+        transform: scale(1.2);
+    }
+}
+
+
+/* ============================================================
+   HEAD
+   ============================================================ */
+
+.robot-head {
+
+    position: absolute;
+
+    top: 0;
+
+    left: 30px;
+
+    width: 215px;
+
+    height: 165px;
+
+    border-radius: 45px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #eefaff,
+            #72869b
+        );
+
+    border: 5px solid #a5f4ff;
+
+    box-shadow:
+        0 0 18px #00eaff,
+        0 0 45px rgba(0,234,255,.7),
+        inset 0 0 25px rgba(255,255,255,.45);
+}
+
+
+/* ============================================================
+   FACE SCREEN
+   ============================================================ */
+
+.face-screen {
+
+    position: absolute;
+
+    left: 30px;
+
+    top: 35px;
+
+    width: 150px;
+
+    height: 90px;
+
+    border-radius: 27px;
+
+    background: #020a13;
+
+    border: 3px solid #00eaff;
+
+    box-shadow:
+        inset 0 0 25px #00eaff,
+        0 0 15px rgba(0,234,255,.5);
+}
+
+
+/* ============================================================
+   EYES
+   ============================================================ */
+
+.eye {
+
+    position: absolute;
+
+    top: 18px;
+
+    width: 28px;
+
+    height: 38px;
+
+    border-radius: 50%;
+
+    background: #00f6ff;
+
+    box-shadow:
+        0 0 12px #00f6ff,
+        0 0 25px #00f6ff;
+
+    animation: blink 4s infinite;
+}
+
+
+.eye-left {
+
+    left: 28px;
+}
+
+
+.eye-right {
+
+    right: 28px;
+}
+
+
+@keyframes blink {
+
+    0%,
+    90%,
+    100% {
+
+        transform: scaleY(1);
+    }
+
+    94% {
+
+        transform: scaleY(0.08);
+    }
+}
+
+
+/* ============================================================
+   MOUTH
+   ============================================================ */
+
+.mouth {
+
+    position: absolute;
+
+    left: 58px;
+
+    bottom: 10px;
+
+    width: 34px;
+
+    height: 8px;
+
+    border-radius: 20px;
+
+    background: #00f6ff;
+
+    box-shadow:
+        0 0 14px #00f6ff;
+
+    animation: robotTalk 0.9s infinite;
+}
+
+
+@keyframes robotTalk {
+
+    0%,
+    100% {
+
+        height: 7px;
+
+        width: 34px;
+    }
+
+    50% {
+
+        height: 22px;
+
+        width: 28px;
+    }
+}
+
+
+/* ============================================================
+   BODY
+   ============================================================ */
+
+.robot-body {
+
+    position: absolute;
+
+    top: 175px;
+
+    left: 62px;
+
+    width: 145px;
+
+    height: 130px;
+
+    border-radius: 30px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #e8f7ff,
+            #61758b
+        );
+
+    border: 5px solid #a5f4ff;
+
+    box-shadow:
+        0 0 20px #00eaff,
+        inset 0 0 20px rgba(255,255,255,.3);
+}
+
+
+/* ============================================================
+   CHEST
+   ============================================================ */
+
+.chest {
+
+    position: absolute;
+
+    top: 29px;
+
+    left: 28px;
+
+    width: 84px;
+
+    height: 62px;
+
+    border-radius: 15px;
+
+    background: #020a13;
+
+    border: 3px solid #00eaff;
+
+    box-shadow:
+        inset 0 0 20px #00eaff;
+}
+
+
+.chest-core {
+
+    position: absolute;
+
+    left: 31px;
+
+    top: 18px;
+
+    width: 18px;
+
+    height: 18px;
+
+    border-radius: 50%;
+
+    background: #00ffae;
+
+    box-shadow:
+        0 0 12px #00ffae,
+        0 0 28px #00ffae;
+
+    animation: corePulse 1.2s infinite;
+}
+
+
+@keyframes corePulse {
+
+    0%,
+    100% {
+
+        transform: scale(0.75);
+    }
+
+    50% {
+
+        transform: scale(1.2);
+    }
+}
+
+
+/* ============================================================
+   ARMS
+   ============================================================ */
+
+.arm {
+
+    position: absolute;
+
+    top: 180px;
+
+    width: 38px;
+
+    height: 110px;
+
+    border-radius: 25px;
+
+    background:
+        linear-gradient(
+            #b5cadb,
+            #52667a
+        );
+
+    border: 4px solid #a5f4ff;
+
+    box-shadow:
+        0 0 15px #00eaff;
+}
+
+
+.arm-left {
+
+    left: 16px;
+
+    transform: rotate(12deg);
+}
+
+
+.arm-right {
+
+    right: 16px;
+
+    transform: rotate(-12deg);
+}
+
+
+/* ============================================================
+   STATUS
+   ============================================================ */
+
+.robot-status {
+
+    text-align: center;
+
+    margin-top: -5px;
+
+    font-family: Arial, sans-serif;
+}
+
+
+.status-pill {
+
+    display: inline-block;
+
+    padding: 10px 25px;
+
+    border-radius: 30px;
+
+    color: #00eaff;
+
+    border: 1px solid #00eaff;
+
+    background: rgba(0,234,255,.08);
+
+    box-shadow:
+        0 0 20px rgba(0,234,255,.25);
+
+    font-size: 14px;
+
+    letter-spacing: 1px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="robot-container">
+
+    <div class="robot-glow"></div>
+
+    <div class="robot">
+
+        <div class="antenna"></div>
+
+        <div class="antenna-light"></div>
+
+        <div class="robot-head">
+
+            <div class="face-screen">
+
+                <div class="eye eye-left"></div>
+
+                <div class="eye eye-right"></div>
+
+                <div class="mouth"></div>
+
+            </div>
+
+        </div>
+
+
+        <div class="robot-body">
+
+            <div class="chest">
+
+                <div class="chest-core"></div>
+
+            </div>
+
+        </div>
+
+
+        <div class="arm arm-left"></div>
+
+        <div class="arm arm-right"></div>
+
+    </div>
+
+</div>
+
+
+<div class="robot-status">
+
+    <span class="status-pill">
+        🟢 BAITHAK IS READY
+    </span>
+
+</div>
+
+
+</body>
+
+</html>
+"""
+
+    components.html(
+        robot_html,
+        height=570,
+        scrolling=False
+    )
 
 
 # ============================================================
@@ -1003,11 +1092,15 @@ with st.sidebar:
 
     if client:
 
-        st.success("🟢 OPENAI CONNECTED")
+        st.success(
+            "🟢 OPENAI CONNECTED"
+        )
 
     else:
 
-        st.error("🔴 OPENAI NOT CONNECTED")
+        st.error(
+            "🔴 OPENAI NOT CONNECTED"
+        )
 
     st.markdown("---")
 
@@ -1029,7 +1122,7 @@ with st.sidebar:
     st.markdown("### 🔐 API SECURITY")
 
     st.info(
-        "API key is loaded from Streamlit Secrets."
+        "API key is loaded securely from Streamlit Secrets."
     )
 
     st.markdown("---")
@@ -1044,6 +1137,8 @@ with st.sidebar:
         st.session_state.last_answer = ""
 
         st.session_state.last_audio = None
+
+        st.session_state.api_error = ""
 
         st.rerun()
 
@@ -1064,62 +1159,7 @@ robot_column, chat_column = st.columns(
 
 with robot_column:
 
-    robot_html = """
-    <div class="robot-container">
-
-        <div class="robot-glow"></div>
-
-        <div class="robot">
-
-            <div class="antenna"></div>
-
-            <div class="antenna-light"></div>
-
-            <div class="robot-head">
-
-                <div class="face-screen">
-
-                    <div class="eye eye-left"></div>
-
-                    <div class="eye eye-right"></div>
-
-                    <div class="mouth"></div>
-
-                </div>
-
-            </div>
-
-            <div class="robot-body">
-
-                <div class="chest">
-
-                    <div class="chest-core"></div>
-
-                </div>
-
-            </div>
-
-            <div class="arm arm-left"></div>
-
-            <div class="arm arm-right"></div>
-
-        </div>
-
-    </div>
-
-    <div class="robot-status">
-
-        <span class="status-pill">
-            🟢 BAITHAK IS READY
-        </span>
-
-    </div>
-    """
-
-    st.markdown(
-        robot_html,
-        unsafe_allow_html=True
-    )
+    render_robot()
 
 
 # ============================================================
@@ -1141,7 +1181,7 @@ with chat_column:
 
         st.info(
             "👋 Assalam-o-Alaikum!\n\n"
-            "I am BAITHAK WITH AI. "
+            "I am BAITHAK WITH AI.\n\n"
             "Type a message or use the microphone."
         )
 
@@ -1192,7 +1232,7 @@ if text_message:
         "🤖 BAITHAK is thinking..."
     ):
 
-        answer = ask_ai(
+        ask_ai(
             text_message
         )
 
@@ -1262,9 +1302,10 @@ if audio_input is not None:
                 spoken_text
             )
 
-            # ================================================
+
+            # =================================================
             # AI RESPONSE
-            # ================================================
+            # =================================================
 
             with st.spinner(
                 "🧠 BAITHAK is thinking..."
@@ -1282,9 +1323,10 @@ if audio_input is not None:
                 answer
             )
 
-            # ================================================
+
+            # =================================================
             # TEXT TO SPEECH
-            # ================================================
+            # =================================================
 
             if voice_enabled:
 
@@ -1357,25 +1399,34 @@ st.markdown(
         </div>
 
         <div class="footer-name">
+
             Designed by Certified Generative and Agentic AI
             Application Developer
+
             <br>
+
             <strong>Engr. Bilal Mehmood</strong>
+
         </div>
 
         <div class="footer-line">
+
             Intelligent Talking AI • Voice Interaction •
             OpenAI Powered • Streamlit Application
+
         </div>
 
         <div class="footer-tech">
+
             🧠 AI &nbsp; • &nbsp;
             🎙️ SPEECH &nbsp; • &nbsp;
             🔊 VOICE &nbsp; • &nbsp;
             🤖 ROBOTICS
+
         </div>
 
     </div>
     """,
     unsafe_allow_html=True
 )
+```
