@@ -1,13 +1,20 @@
 import os
-import tempfile
-from datetime import datetime
-
+import base64
 import streamlit as st
 import streamlit.components.v1 as components
 
+# ============================================================
+# OPTIONAL OPENAI IMPORT
+# ============================================================
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -22,76 +29,41 @@ st.set_page_config(
 # CONFIGURATION
 # ============================================================
 
-APP_NAME = "BAITHAK WITH AI"
-
 DEFAULT_MODEL = "gpt-4o-mini"
-TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
-TTS_MODEL = "gpt-4o-mini-tts"
-TTS_VOICE = "alloy"
-
-SYSTEM_PROMPT = """
-You are BAITHAK WITH AI, a helpful, friendly and professional
-AI assistant.
-
-Answer clearly and practically.
-
-Keep responses concise unless the user asks for detail.
-
-Use simple language where possible.
-
-For technical questions, provide accurate step-by-step guidance.
-
-Do not invent facts.
-
-If you are uncertain, clearly say that you are uncertain.
-
-You can help with:
-
-- Artificial Intelligence
-- Generative AI
-- Agentic AI
-- Python
-- Programming
-- Streamlit
-- Google AI Studio
-- Automation
-- Robotics
-- Education
-- Productivity
-- Technology
-"""
+DEFAULT_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
+DEFAULT_TTS_MODEL = "gpt-4o-mini-tts"
+DEFAULT_TTS_VOICE = "alloy"
 
 
 # ============================================================
-# SECRET HELPER
+# GET SETTINGS FROM STREAMLIT SECRETS / ENVIRONMENT
 # ============================================================
 
 def get_secret(name, default=None):
-
+    """Read a value from Streamlit Secrets first, then environment."""
     try:
-
-        value = st.secrets.get(name)
-
-        if value:
-            return value
-
+        if name in st.secrets:
+            value = st.secrets[name]
+            if value is not None and str(value).strip():
+                return str(value).strip()
     except Exception:
         pass
 
-    return os.getenv(
-        name,
-        default,
-    )
+    value = os.getenv(name)
+    if value is not None and str(value).strip():
+        return str(value).strip()
+
+    return default
 
 
-OPENAI_API_KEY = get_secret(
-    "OPENAI_API_KEY"
+OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+OPENAI_MODEL = get_secret("OPENAI_MODEL", DEFAULT_MODEL)
+TRANSCRIPTION_MODEL = get_secret(
+    "TRANSCRIPTION_MODEL",
+    DEFAULT_TRANSCRIPTION_MODEL
 )
-
-OPENAI_MODEL = get_secret(
-    "OPENAI_MODEL",
-    DEFAULT_MODEL,
-)
+TTS_MODEL = get_secret("TTS_MODEL", DEFAULT_TTS_MODEL)
+TTS_VOICE = get_secret("TTS_VOICE", DEFAULT_TTS_VOICE)
 
 
 # ============================================================
@@ -107,289 +79,492 @@ if "last_answer" not in st.session_state:
 if "voice_audio" not in st.session_state:
     st.session_state.voice_audio = None
 
-if "mode" not in st.session_state:
-    st.session_state.mode = "Demo Mode"
-
 if "last_error" not in st.session_state:
     st.session_state.last_error = ""
 
+if "trial_popup_shown" not in st.session_state:
+    st.session_state.trial_popup_shown = False
+
+if "trial_accepted" not in st.session_state:
+    st.session_state.trial_accepted = False
+
 
 # ============================================================
-# APPLICATION CSS
+# OPENAI CLIENT
+# ============================================================
+
+@st.cache_resource
+def get_openai_client(api_key):
+    if not api_key:
+        return None
+
+    if OpenAI is None:
+        return None
+
+    try:
+        return OpenAI(api_key=api_key)
+    except Exception:
+        return None
+
+
+client = get_openai_client(OPENAI_API_KEY)
+
+
+# ============================================================
+# GLOBAL CSS
 # ============================================================
 
 st.markdown(
     """
     <style>
 
-    /* ========================================================
-       APPLICATION BACKGROUND
-       ======================================================== */
+    /* --------------------------------------------------------
+       MAIN APP
+    -------------------------------------------------------- */
 
     .stApp {
-
         background:
             radial-gradient(
                 circle at 15% 10%,
-                rgba(255,255,255,0.95),
-                transparent 25%
-            ),
-
-            radial-gradient(
-                circle at 90% 15%,
-                rgba(95,220,255,0.30),
+                rgba(0, 190, 230, 0.12),
                 transparent 30%
             ),
-
+            radial-gradient(
+                circle at 85% 15%,
+                rgba(0, 120, 180, 0.10),
+                transparent 30%
+            ),
             linear-gradient(
                 135deg,
-                #effcff 0%,
-                #ddf7ff 40%,
-                #c9efff 70%,
-                #b9eaff 100%
+                #f7fdff 0%,
+                #eefaff 45%,
+                #ffffff 100%
             );
-
-        color: #063b55;
     }
 
 
-    .block-container {
-
-        max-width: 1250px;
-
-        padding-top: 1.5rem;
-
-        padding-bottom: 2rem;
-    }
-
-
-    /* ========================================================
-       STREAMLIT HEADINGS
-       ======================================================== */
-
-    h1 {
-
-        color:
-            #034e6d !important;
-
-        font-weight:
-            900 !important;
-
-        letter-spacing:
-            1px;
-    }
-
-
-    h2,
-    h3 {
-
-        color:
-            #075477 !important;
-    }
-
-
-    /* ========================================================
+    /* --------------------------------------------------------
        SIDEBAR
-       ======================================================== */
+    -------------------------------------------------------- */
 
-    [data-testid="stSidebar"] {
-
+    section[data-testid="stSidebar"] {
         background:
             linear-gradient(
                 180deg,
-                #e5faff 0%,
-                #d0f2ff 50%,
-                #bceaff 100%
+                #e8f9ff 0%,
+                #f7fdff 100%
             );
-
-        border-right:
-            1px solid
-            rgba(0,110,160,0.15);
+        border-right: 1px solid rgba(0, 160, 200, 0.15);
     }
 
 
-    [data-testid="stSidebar"] * {
-
-        color:
-            #063b55;
-    }
-
-
-    /* ========================================================
-       GLASS CARDS
-       ======================================================== */
-
-    .glass-card {
-
-        padding:
-            22px;
-
-        margin-top:
-            18px;
-
-        border-radius:
-            22px;
-
-        background:
-            rgba(255,255,255,0.68);
-
-        border:
-            1px solid
-            rgba(0,130,180,0.14);
-
-        box-shadow:
-            0 12px 35px
-            rgba(0,100,150,0.10);
-
-        backdrop-filter:
-            blur(14px);
-    }
-
-
-    .card-title {
-
-        color:
-            #005477;
-
-        font-size:
-            22px;
-
-        font-weight:
-            850;
-
-        margin-bottom:
-            8px;
-    }
-
-
-    /* ========================================================
-       CHAT
-       ======================================================== */
-
-    [data-testid="stChatMessage"] {
-
-        background:
-            rgba(255,255,255,0.58);
-
-        border-radius:
-            18px;
-
-        border:
-            1px solid
-            rgba(0,120,170,0.10);
-
-        margin-bottom:
-            10px;
-    }
-
-
-    /* ========================================================
+    /* --------------------------------------------------------
        BUTTONS
-       ======================================================== */
+    -------------------------------------------------------- */
 
     .stButton > button {
-
-        border-radius:
-            14px;
-
-        border:
-            1px solid
-            rgba(0,110,160,0.20);
-
-        font-weight:
-            750;
-
-        background:
-            linear-gradient(
-                135deg,
-                #ffffff,
-                #dff7ff
-            );
-
-        color:
-            #005477;
-
-        box-shadow:
-            0 5px 15px
-            rgba(0,100,150,0.10);
-
-        transition:
-            all 0.2s ease;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 150, 190, 0.25);
+        font-weight: 700;
+        transition: all 0.25s ease;
     }
-
 
     .stButton > button:hover {
-
-        border-color:
-            #00a9df;
-
-        color:
-            #004765;
-
-        transform:
-            translateY(-1px);
-
+        transform: translateY(-2px);
         box-shadow:
-            0 8px 20px
-            rgba(0,130,180,0.18);
+            0 8px 25px rgba(0, 160, 200, 0.18);
     }
 
 
-    /* ========================================================
+    /* --------------------------------------------------------
+       CHAT MESSAGE
+    -------------------------------------------------------- */
+
+    div[data-testid="stChatMessage"] {
+        border-radius: 18px;
+        border: 1px solid rgba(0, 150, 190, 0.10);
+        box-shadow:
+            0 5px 20px rgba(0, 80, 110, 0.05);
+        margin-bottom: 12px;
+    }
+
+
+    /* --------------------------------------------------------
+       INFO CARD
+    -------------------------------------------------------- */
+
+    .info-card {
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.72);
+        border: 1px solid rgba(0, 170, 210, 0.16);
+        box-shadow: 0 8px 30px rgba(0,80,110,0.06);
+        margin-bottom: 18px;
+    }
+
+    .info-card-title {
+        font-size: 17px;
+        font-weight: 800;
+        color: #034e6d;
+        margin-bottom: 8px;
+    }
+
+    .info-card-text {
+        color: #42636e;
+        line-height: 1.55;
+        font-size: 14px;
+    }
+
+
+    /* --------------------------------------------------------
+       STATUS
+    -------------------------------------------------------- */
+
+    .status-online {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 13px;
+        border-radius: 30px;
+        background: rgba(0, 180, 120, 0.10);
+        color: #087f5b;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .status-demo {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 13px;
+        border-radius: 30px;
+        background: rgba(255, 170, 0, 0.12);
+        color: #9b6500;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+
+    /* --------------------------------------------------------
        FOOTER
-       ======================================================== */
+    -------------------------------------------------------- */
 
     .footer {
-
-        margin-top:
-            40px;
-
-        padding:
-            22px;
-
-        text-align:
-            center;
-
-        color:
-            #075477;
-
-        font-size:
-            14px;
-
-        border-top:
-            1px solid
-            rgba(0,100,150,0.15);
-    }
-
-
-    .footer strong {
-
-        color:
-            #004d70;
-    }
-
-
-    /* ========================================================
-       MOBILE
-       ======================================================== */
-
-    @media (max-width: 700px) {
-
-        .block-container {
-
-            padding-left:
-                0.8rem;
-
-            padding-right:
-                0.8rem;
-        }
-
+        text-align: center;
+        color: #6a858e;
+        font-size: 12px;
+        padding: 30px 0 15px;
     }
 
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+# ============================================================
+# TRIAL POPUP
+# ============================================================
+
+def show_trial_popup():
+
+    popup_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background:
+                radial-gradient(
+                    circle at center,
+                    rgba(0, 200, 255, 0.18),
+                    transparent 45%
+                ),
+                rgba(2, 25, 40, 0.82);
+
+            backdrop-filter: blur(10px);
+
+            z-index: 999999;
+        }
+
+        .popup {
+            width: min(560px, 90vw);
+
+            padding: 40px 36px;
+
+            text-align: center;
+
+            border-radius: 28px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #ffffff,
+                    #eafaff
+                );
+
+            border:
+                1px solid rgba(0, 180, 220, 0.35);
+
+            box-shadow:
+                0 30px 100px rgba(0,0,0,0.40),
+                0 0 50px rgba(0,200,255,0.20);
+
+            animation:
+                popupIn 0.7s cubic-bezier(.2,.8,.2,1);
+        }
+
+        @keyframes popupIn {
+            from {
+                opacity: 0;
+                transform:
+                    translateY(35px)
+                    scale(0.78);
+            }
+
+            to {
+                opacity: 1;
+                transform:
+                    translateY(0)
+                    scale(1);
+            }
+        }
+
+        .robot {
+            font-size: 76px;
+
+            display: inline-block;
+
+            animation:
+                floatRobot 2.2s ease-in-out infinite;
+
+            filter:
+                drop-shadow(
+                    0 10px 20px
+                    rgba(0,160,210,0.25)
+                );
+        }
+
+        @keyframes floatRobot {
+
+            0%,100% {
+                transform:
+                    translateY(0)
+                    rotate(0deg);
+            }
+
+            50% {
+                transform:
+                    translateY(-12px)
+                    rotate(2deg);
+            }
+        }
+
+        .badge {
+            display: inline-block;
+
+            margin-top: 12px;
+
+            padding:
+                8px 18px;
+
+            border-radius: 30px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #007da3,
+                    #00b9dc
+                );
+
+            color: white;
+
+            font-size: 13px;
+            font-weight: 900;
+
+            letter-spacing: 1.5px;
+
+            box-shadow:
+                0 8px 22px
+                rgba(0,160,200,0.30);
+        }
+
+        h1 {
+            margin:
+                16px 0 8px;
+
+            color: #034e6d;
+
+            font-size: 34px;
+            font-weight: 900;
+        }
+
+        .subtitle {
+            color: #42636e;
+
+            font-size: 17px;
+
+            line-height: 1.6;
+
+            margin-bottom: 18px;
+        }
+
+        .notice {
+            padding: 14px 18px;
+
+            margin:
+                18px 0 25px;
+
+            text-align: left;
+
+            border-radius: 14px;
+
+            background:
+                rgba(0,160,200,0.08);
+
+            border-left:
+                4px solid #00a8cc;
+
+            color: #365964;
+
+            font-size: 14px;
+
+            line-height: 1.5;
+        }
+
+        .continue {
+            display: inline-block;
+
+            padding:
+                13px 28px;
+
+            border-radius: 30px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #006f91,
+                    #00b8dc
+                );
+
+            color: white;
+
+            font-size: 16px;
+            font-weight: 800;
+
+            box-shadow:
+                0 10px 25px
+                rgba(0,150,190,0.30);
+        }
+
+        .small {
+            margin-top: 16px;
+
+            color: #79929a;
+
+            font-size: 12px;
+        }
+
+    </style>
+    </head>
+
+    <body>
+
+        <div class="overlay">
+
+            <div class="popup">
+
+                <div class="robot">
+                    🤖
+                </div>
+
+                <div class="badge">
+                    TRIAL VERSION
+                </div>
+
+                <h1>
+                    BAITHAK WITH AI
+                </h1>
+
+                <div class="subtitle">
+                    Welcome to your intelligent
+                    voice & text AI assistant.
+                </div>
+
+                <div class="notice">
+                    🧪 <b>Trial / Testing Phase</b><br>
+                    This application is currently being
+                    evaluated and improved. Some features
+                    may be experimental or subject to change.
+                </div>
+
+                <div class="continue">
+                    ✨ Continue to Baithak
+                </div>
+
+                <div class="small">
+                    Powered by AI • Voice • Text • Automation
+                </div>
+
+            </div>
+
+        </div>
+
+    </body>
+    </html>
+    """
+
+    components.html(
+        popup_html,
+        height=720,
+        scrolling=False
+    )
+
+
+# ============================================================
+# SHOW TRIAL POPUP
+# ============================================================
+
+# The popup is shown when the Streamlit session starts.
+# A Continue button is displayed below the popup by Streamlit
+# so the user can enter the application.
+
+if not st.session_state.trial_accepted:
+
+    show_trial_popup()
+
+    popup_col1, popup_col2, popup_col3 = st.columns([2, 2, 2])
+
+    with popup_col2:
+
+        if st.button(
+            "🚀 Continue to Baithak",
+            use_container_width=True,
+            type="primary"
+        ):
+            st.session_state.trial_accepted = True
+            st.rerun()
+
+    st.stop()
 
 
 # ============================================================
@@ -400,756 +575,669 @@ def show_animated_robot():
 
     robot_html = """
     <!DOCTYPE html>
-
     <html>
-
     <head>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
 
     <style>
 
-    html,
-    body {
-
-        margin: 0;
-        padding: 0;
-
-        width: 100%;
-        height: 100%;
-
-        overflow: hidden;
-
-        background: transparent;
-    }
-
-
-    .robot-wrapper {
-
-        width: 100%;
-
-        height: 550px;
-
-        display: flex;
-
-        justify-content: center;
-
-        align-items: center;
-
-        position: relative;
-    }
-
-
-    .robot {
-
-        width: 390px;
-
-        height: 510px;
-
-        position: relative;
-
-        animation:
-            floatRobot 3.5s
-            ease-in-out
-            infinite;
-    }
-
-
-    /* ======================================================
-       FLOOR GLOW
-       ====================================================== */
-
-    .glow {
-
-        position: absolute;
-
-        width: 290px;
-
-        height: 90px;
-
-        left: 50%;
-
-        bottom: 25px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            50%;
-
-        background:
-            rgba(0,210,255,0.25);
-
-        filter:
-            blur(25px);
-
-        animation:
-            glowPulse 2.5s
-            ease-in-out
-            infinite;
-    }
-
-
-    /* ======================================================
-       ANTENNA
-       ====================================================== */
-
-    .antenna {
-
-        position: absolute;
-
-        width: 9px;
-
-        height: 58px;
-
-        left: 50%;
-
-        top: 0;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            10px;
-
-        background:
-            linear-gradient(
-                to bottom,
-                #07577a,
-                #0abce8
-            );
-    }
-
-
-    .antenna-light {
-
-        position: absolute;
-
-        width: 28px;
-
-        height: 28px;
-
-        left: 50%;
-
-        top: -10px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            50%;
-
-        background:
-            white;
-
-        box-shadow:
-            0 0 8px white,
-            0 0 18px #00eaff,
-            0 0 35px #00eaff;
-
-        animation:
-            antennaPulse 1.2s
-            infinite;
-    }
-
-
-    /* ======================================================
-       EARS
-       ====================================================== */
-
-    .ear {
-
-        position: absolute;
-
-        top: 108px;
-
-        width: 42px;
-
-        height: 75px;
-
-        border-radius:
-            22px;
-
-        background:
-            linear-gradient(
-                145deg,
-                #effcff,
-                #86d9f2
-            );
-
-        border:
-            6px solid #086d98;
-
-        box-shadow:
-            0 8px 18px
-            rgba(0,80,120,0.20);
-    }
-
-
-    .ear.left {
-
-        left: 35px;
-    }
-
-
-    .ear.right {
-
-        right: 35px;
-    }
-
-
-    /* ======================================================
-       HEAD
-       ====================================================== */
-
-    .head {
-
-        position: absolute;
-
-        width: 245px;
-
-        height: 175px;
-
-        left: 50%;
-
-        top: 55px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            55px;
-
-        background:
-            linear-gradient(
-                145deg,
-                #ffffff,
-                #c7f2ff
-            );
-
-        border:
-            7px solid #086d98;
-
-        box-shadow:
-            0 18px 40px
-            rgba(0,80,120,0.28),
-
-            inset 0 0 30px
-            rgba(255,255,255,0.9);
-    }
-
-
-    /* ======================================================
-       EYES
-       ====================================================== */
-
-    .eye {
-
-        position: absolute;
-
-        width: 42px;
-
-        height: 50px;
-
-        top: 54px;
-
-        border-radius:
-            50%;
-
-        background:
-            radial-gradient(
-                circle at 35% 25%,
-                #ffffff 0 8%,
-                #00eaff 12%,
-                #0084a9 48%,
-                #003e58 75%
-            );
-
-        box-shadow:
-            0 0 12px #00eaff,
-            0 0 28px
-            rgba(0,230,255,0.80);
-
-        animation:
-            blink 5s infinite;
-    }
-
-
-    .eye.left {
-
-        left: 48px;
-    }
-
-
-    .eye.right {
-
-        right: 48px;
-    }
-
-
-    /* ======================================================
-       EYE SCANNER
-       ====================================================== */
-
-    .scan-line {
-
-        position: absolute;
-
-        left: 12px;
-
-        right: 12px;
-
-        top: 50%;
-
-        height: 3px;
-
-        background:
-            #ffffff;
-
-        box-shadow:
-            0 0 8px #00ffff;
-
-        animation:
-            scan 1.7s
-            ease-in-out
-            infinite;
-    }
-
-
-    /* ======================================================
-       MOUTH
-       ====================================================== */
-
-    .mouth {
-
-        position: absolute;
-
-        left: 50%;
-
-        bottom: 27px;
-
-        width: 75px;
-
-        height: 16px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            20px;
-
-        background:
-            #064b67;
-
-        box-shadow:
-            0 0 12px
-            rgba(0,220,255,0.75);
-
-        animation:
-            talk 1.1s
-            ease-in-out
-            infinite;
-    }
-
-
-    /* ======================================================
-       BODY
-       ====================================================== */
-
-    .body {
-
-        position: absolute;
-
-        width: 205px;
-
-        height: 160px;
-
-        left: 50%;
-
-        bottom: 45px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            45px 45px 32px 32px;
-
-        background:
-            linear-gradient(
-                145deg,
-                #ffffff,
-                #a9e5f7
-            );
-
-        border:
-            7px solid #086d98;
-
-        box-shadow:
-            0 18px 40px
-            rgba(0,80,120,0.28),
-
-            inset 0 0 25px
-            rgba(255,255,255,0.9);
-    }
-
-
-    /* ======================================================
-       CHEST PANEL
-       ====================================================== */
-
-    .chest {
-
-        position: absolute;
-
-        width: 105px;
-
-        height: 58px;
-
-        left: 50%;
-
-        top: 38px;
-
-        transform:
-            translateX(-50%);
-
-        border-radius:
-            17px;
-
-        background:
-            #063e57;
-
-        border:
-            3px solid #00bde9;
-
-        box-shadow:
-            inset 0 0 18px
-            rgba(0,230,255,0.25),
-
-            0 5px 12px
-            rgba(0,50,80,0.20);
-    }
-
-
-    .dot {
-
-        position: absolute;
-
-        width: 12px;
-
-        height: 12px;
-
-        top: 20px;
-
-        border-radius:
-            50%;
-
-        background:
-            #00eaff;
-
-        box-shadow:
-            0 0 8px #00eaff,
-            0 0 18px #00eaff;
-
-        animation:
-            dotPulse 1s
-            infinite alternate;
-    }
-
-
-    .dot.one {
-
-        left: 20px;
-    }
-
-
-    .dot.two {
-
-        left: 46px;
-
-        animation-delay:
-            .2s;
-    }
-
-
-    .dot.three {
-
-        right: 20px;
-
-        animation-delay:
-            .4s;
-    }
-
-
-    /* ======================================================
-       ARMS
-       ====================================================== */
-
-    .arm {
-
-        position: absolute;
-
-        width: 43px;
-
-        height: 135px;
-
-        top: 285px;
-
-        border-radius:
-            25px;
-
-        background:
-            linear-gradient(
-                145deg,
-                #f3fdff,
-                #8bd8f1
-            );
-
-        border:
-            6px solid #086d98;
-
-        box-shadow:
-            0 10px 20px
-            rgba(0,80,120,0.22);
-    }
-
-
-    .arm.left {
-
-        left: 45px;
-
-        transform:
-            rotate(20deg);
-
-        animation:
-            leftArm 2.2s
-            ease-in-out
-            infinite;
-    }
-
-
-    .arm.right {
-
-        right: 45px;
-
-        transform:
-            rotate(-20deg);
-
-        animation:
-            rightArm 2.2s
-            ease-in-out
-            infinite;
-    }
-
-
-    /* ======================================================
-       HANDS
-       ====================================================== */
-
-    .hand {
-
-        position: absolute;
-
-        width: 55px;
-
-        height: 55px;
-
-        border-radius:
-            50%;
-
-        background:
-            linear-gradient(
-                145deg,
-                #ffffff,
-                #91dcf3
-            );
-
-        border:
-            5px solid #086d98;
-    }
-
-
-    .hand.left {
-
-        left: 31px;
-
-        top: 400px;
-    }
-
-
-    .hand.right {
-
-        right: 31px;
-
-        top: 400px;
-    }
-
-
-    /* ======================================================
-       ANIMATIONS
-       ====================================================== */
-
-    @keyframes floatRobot {
-
-        0%,
-        100% {
-            transform:
-                translateY(0);
+        * {
+            box-sizing: border-box;
         }
 
-        50% {
-            transform:
-                translateY(-16px);
-        }
-    }
-
-
-    @keyframes blink {
-
-        0%,
-        92%,
-        100% {
-            transform:
-                scaleY(1);
+        body {
+            margin: 0;
+            background: transparent;
+            overflow: hidden;
         }
 
-        95% {
-            transform:
-                scaleY(0.08);
-        }
-    }
+        .scene {
+            height: 500px;
 
+            display: flex;
 
-    @keyframes talk {
+            justify-content: center;
 
-        0%,
-        100% {
-            height:
-                14px;
-        }
+            align-items: center;
 
-        50% {
-            height:
-                30px;
-        }
-    }
+            position: relative;
 
-
-    @keyframes antennaPulse {
-
-        0%,
-        100% {
-            transform:
-                translateX(-50%)
-                scale(1);
-
-            opacity:
-                1;
+            font-family: Arial, sans-serif;
         }
 
-        50% {
-            transform:
-                translateX(-50%)
-                scale(1.35);
 
-            opacity:
-                0.65;
-        }
-    }
+        /* ----------------------------------------------------
+           FLOOR GLOW
+        ---------------------------------------------------- */
 
+        .floor {
+            position: absolute;
 
-    @keyframes dotPulse {
+            bottom: 35px;
 
-        from {
-            transform:
-                scale(0.7);
+            width: 330px;
+            height: 35px;
 
-            opacity:
-                0.5;
-        }
+            border-radius: 50%;
 
-        to {
-            transform:
-                scale(1.25);
+            background:
+                radial-gradient(
+                    ellipse,
+                    rgba(0,180,230,0.38),
+                    rgba(0,180,230,0.04),
+                    transparent 70%
+                );
 
-            opacity:
-                1;
-        }
-    }
+            filter: blur(4px);
 
-
-    @keyframes scan {
-
-        0%,
-        100% {
-            top:
-                25%;
-
-            opacity:
-                0.5;
+            animation:
+                floorPulse 2.5s ease-in-out infinite;
         }
 
-        50% {
-            top:
-                70%;
+        @keyframes floorPulse {
 
-            opacity:
-                1;
-        }
-    }
+            0%,100% {
+                transform: scaleX(0.85);
+                opacity: 0.55;
+            }
 
-
-    @keyframes leftArm {
-
-        0%,
-        100% {
-            transform:
-                rotate(20deg);
+            50% {
+                transform: scaleX(1.08);
+                opacity: 1;
+            }
         }
 
-        50% {
-            transform:
-                rotate(5deg);
+
+        /* ----------------------------------------------------
+           ROBOT
+        ---------------------------------------------------- */
+
+        .robot {
+
+            position: relative;
+
+            width: 220px;
+
+            animation:
+                robotFloat 3s ease-in-out infinite;
         }
-    }
 
+        @keyframes robotFloat {
 
-    @keyframes rightArm {
+            0%,100% {
+                transform:
+                    translateY(0);
+            }
 
-        0%,
-        100% {
-            transform:
-                rotate(-20deg);
+            50% {
+                transform:
+                    translateY(-14px);
+            }
         }
 
-        50% {
-            transform:
-                rotate(-5deg);
-        }
-    }
 
+        /* ----------------------------------------------------
+           ANTENNA
+        ---------------------------------------------------- */
 
-    @keyframes glowPulse {
+        .antenna {
 
-        0%,
-        100% {
-            opacity:
-                0.35;
+            width: 5px;
+            height: 42px;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #5eeaff,
+                    #0788ae
+                );
+
+            position: absolute;
+
+            top: -45px;
+
+            left: 50%;
 
             transform:
-                translateX(-50%)
-                scaleX(0.85);
+                translateX(-50%);
+
+            border-radius: 5px;
         }
 
-        50% {
-            opacity:
-                0.70;
+        .antenna-ball {
+
+            width: 17px;
+            height: 17px;
+
+            border-radius: 50%;
+
+            background: #00d9ff;
+
+            position: absolute;
+
+            top: -12px;
+
+            left: 50%;
 
             transform:
-                translateX(-50%)
-                scaleX(1.05);
+                translateX(-50%);
+
+            box-shadow:
+                0 0 15px #00d9ff,
+                0 0 30px rgba(0,217,255,0.6);
+
+            animation:
+                antennaPulse 1.4s ease-in-out infinite;
         }
-    }
+
+        @keyframes antennaPulse {
+
+            0%,100% {
+                transform:
+                    translateX(-50%)
+                    scale(0.85);
+
+                opacity: 0.7;
+            }
+
+            50% {
+                transform:
+                    translateX(-50%)
+                    scale(1.2);
+
+                opacity: 1;
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           HEAD
+        ---------------------------------------------------- */
+
+        .head {
+
+            width: 220px;
+            height: 155px;
+
+            position: relative;
+
+            border-radius: 48px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #f8fdff,
+                    #ccecf5
+                );
+
+            border:
+                5px solid #087e9e;
+
+            box-shadow:
+                inset 0 0 20px
+                rgba(255,255,255,0.8),
+
+                0 15px 35px
+                rgba(0,120,160,0.25);
+        }
+
+
+        /* ----------------------------------------------------
+           EARS
+        ---------------------------------------------------- */
+
+        .ear {
+            position: absolute;
+
+            top: 52px;
+
+            width: 22px;
+            height: 52px;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #bdebf5,
+                    #5fc8df
+                );
+
+            border:
+                3px solid #087e9e;
+
+            border-radius: 10px;
+        }
+
+        .ear.left {
+            left: -27px;
+        }
+
+        .ear.right {
+            right: -27px;
+        }
+
+
+        /* ----------------------------------------------------
+           FACE SCREEN
+        ---------------------------------------------------- */
+
+        .face {
+
+            position: absolute;
+
+            left: 15px;
+            right: 15px;
+
+            top: 20px;
+            bottom: 20px;
+
+            border-radius: 32px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #063b51,
+                    #021f2c
+                );
+
+            border:
+                3px solid #1ba8c8;
+
+            box-shadow:
+                inset 0 0 30px
+                rgba(0,220,255,0.10);
+        }
+
+
+        /* ----------------------------------------------------
+           EYES
+        ---------------------------------------------------- */
+
+        .eyes {
+
+            display: flex;
+
+            justify-content: center;
+
+            gap: 52px;
+
+            margin-top: 34px;
+        }
+
+        .eye {
+
+            width: 26px;
+            height: 34px;
+
+            border-radius: 50%;
+
+            background:
+                radial-gradient(
+                    circle at 50% 40%,
+                    white 0 10%,
+                    #00eaff 25%,
+                    #009dcc 60%,
+                    #00647e 100%
+                );
+
+            box-shadow:
+                0 0 12px #00eaff;
+
+            animation:
+                blink 4.5s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,44%,48%,100% {
+                transform:
+                    scaleY(1);
+            }
+
+            46% {
+                transform:
+                    scaleY(0.08);
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           SCAN LINE
+        ---------------------------------------------------- */
+
+        .scan {
+
+            position: absolute;
+
+            left: 15px;
+            right: 15px;
+
+            top: 20px;
+
+            height: 2px;
+
+            background:
+                rgba(0,240,255,0.55);
+
+            box-shadow:
+                0 0 8px #00eaff;
+
+            animation:
+                scan 2.8s linear infinite;
+        }
+
+        @keyframes scan {
+
+            0% {
+                top: 20px;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 120px;
+                opacity: 0;
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           MOUTH
+        ---------------------------------------------------- */
+
+        .mouth {
+
+            width: 72px;
+            height: 25px;
+
+            position: absolute;
+
+            left: 50%;
+
+            transform:
+                translateX(-50%);
+
+            bottom: 22px;
+
+            border-radius: 0 0 35px 35px;
+
+            border-bottom:
+                5px solid #00eaff;
+
+            box-shadow:
+                0 5px 15px
+                rgba(0,230,255,0.35);
+
+            animation:
+                talk 1.1s ease-in-out infinite;
+        }
+
+        @keyframes talk {
+
+            0%,100% {
+                height: 12px;
+            }
+
+            50% {
+                height: 30px;
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           BODY
+        ---------------------------------------------------- */
+
+        .body {
+
+            width: 165px;
+            height: 160px;
+
+            margin:
+                -2px auto 0;
+
+            position: relative;
+
+            border-radius:
+                35px 35px 45px 45px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #f3fbff,
+                    #b9e6f1
+                );
+
+            border:
+                5px solid #087e9e;
+
+            box-shadow:
+                0 18px 30px
+                rgba(0,100,140,0.20);
+        }
+
+
+        /* ----------------------------------------------------
+           CHEST
+        ---------------------------------------------------- */
+
+        .chest {
+
+            position: absolute;
+
+            width: 72px;
+            height: 72px;
+
+            top: 28px;
+            left: 50%;
+
+            transform:
+                translateX(-50%);
+
+            border-radius: 50%;
+
+            background:
+                radial-gradient(
+                    circle,
+                    #052d3d,
+                    #021b27
+                );
+
+            border:
+                3px solid #00a7c7;
+
+            box-shadow:
+                0 0 20px
+                rgba(0,220,255,0.20);
+        }
+
+        .core {
+
+            position: absolute;
+
+            width: 25px;
+            height: 25px;
+
+            top: 50%;
+            left: 50%;
+
+            transform:
+                translate(-50%, -50%);
+
+            border-radius: 50%;
+
+            background:
+                #00eaff;
+
+            box-shadow:
+                0 0 15px #00eaff,
+                0 0 35px rgba(0,230,255,0.55);
+
+            animation:
+                corePulse 1.2s infinite;
+        }
+
+        @keyframes corePulse {
+
+            0%,100% {
+                transform:
+                    translate(-50%, -50%)
+                    scale(0.8);
+
+                opacity: 0.65;
+            }
+
+            50% {
+                transform:
+                    translate(-50%, -50%)
+                    scale(1.2);
+
+                opacity: 1;
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           ARMS
+        ---------------------------------------------------- */
+
+        .arm {
+
+            width: 35px;
+            height: 105px;
+
+            position: absolute;
+
+            top: 28px;
+
+            border-radius: 22px;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    #e5f8fc,
+                    #82d4e5
+                );
+
+            border:
+                4px solid #087e9e;
+        }
+
+        .arm.left {
+
+            left: -40px;
+
+            transform:
+                rotate(16deg);
+
+            transform-origin:
+                top center;
+
+            animation:
+                leftArm 2.5s ease-in-out infinite;
+        }
+
+        .arm.right {
+
+            right: -40px;
+
+            transform:
+                rotate(-16deg);
+
+            transform-origin:
+                top center;
+
+            animation:
+                rightArm 2.5s ease-in-out infinite;
+        }
+
+        @keyframes leftArm {
+
+            0%,100% {
+                transform:
+                    rotate(16deg);
+            }
+
+            50% {
+                transform:
+                    rotate(28deg);
+            }
+        }
+
+        @keyframes rightArm {
+
+            0%,100% {
+                transform:
+                    rotate(-16deg);
+            }
+
+            50% {
+                transform:
+                    rotate(-28deg);
+            }
+        }
+
+
+        /* ----------------------------------------------------
+           STATUS LIGHTS
+        ---------------------------------------------------- */
+
+        .lights {
+
+            position: absolute;
+
+            bottom: 25px;
+
+            left: 50%;
+
+            transform:
+                translateX(-50%);
+
+            display: flex;
+
+            gap: 8px;
+        }
+
+        .light {
+
+            width: 8px;
+            height: 8px;
+
+            border-radius: 50%;
+
+            background:
+                #00eaff;
+
+            box-shadow:
+                0 0 10px #00eaff;
+
+            animation:
+                lightBlink 1.5s infinite;
+        }
+
+        .light:nth-child(2) {
+            animation-delay: .2s;
+        }
+
+        .light:nth-child(3) {
+            animation-delay: .4s;
+        }
+
+        @keyframes lightBlink {
+
+            0%,100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
 
     </style>
 
@@ -1157,406 +1245,185 @@ def show_animated_robot():
 
     <body>
 
-        <div class="robot-wrapper">
+        <div class="scene">
+
+            <div class="floor"></div>
 
             <div class="robot">
 
-                <div class="glow"></div>
-
-                <div class="antenna"></div>
-
-                <div class="antenna-light"></div>
-
-                <div class="ear left"></div>
-
-                <div class="ear right"></div>
+                <div class="antenna">
+                    <div class="antenna-ball"></div>
+                </div>
 
                 <div class="head">
 
-                    <div class="eye left">
-                        <div class="scan-line"></div>
-                    </div>
+                    <div class="ear left"></div>
+                    <div class="ear right"></div>
 
-                    <div class="eye right">
-                        <div class="scan-line"></div>
-                    </div>
+                    <div class="face">
 
-                    <div class="mouth"></div>
+                        <div class="scan"></div>
+
+                        <div class="eyes">
+                            <div class="eye"></div>
+                            <div class="eye"></div>
+                        </div>
+
+                        <div class="mouth"></div>
+
+                    </div>
 
                 </div>
-
-                <div class="arm left"></div>
-
-                <div class="arm right"></div>
 
                 <div class="body">
 
+                    <div class="arm left"></div>
+                    <div class="arm right"></div>
+
                     <div class="chest">
+                        <div class="core"></div>
+                    </div>
 
-                        <div class="dot one"></div>
-
-                        <div class="dot two"></div>
-
-                        <div class="dot three"></div>
-
+                    <div class="lights">
+                        <div class="light"></div>
+                        <div class="light"></div>
+                        <div class="light"></div>
                     </div>
 
                 </div>
-
-                <div class="hand left"></div>
-
-                <div class="hand right"></div>
 
             </div>
 
         </div>
 
     </body>
-
     </html>
     """
 
     components.html(
         robot_html,
-        height=560,
-        scrolling=False,
+        height=510,
+        scrolling=False
     )
 
 
 # ============================================================
-# OPENAI CLIENT
+# DEMO RESPONSE
 # ============================================================
 
-def create_openai_client():
+def demo_response(question):
 
-    if not OPENAI_API_KEY:
-        return None
+    question_lower = question.lower().strip()
 
-    try:
-
-        from openai import OpenAI
-
-        return OpenAI(
-            api_key=OPENAI_API_KEY,
-            timeout=60.0,
-            max_retries=0,
-        )
-
-    except Exception:
-
-        return None
-
-
-# ============================================================
-# ERROR DETECTION
-# ============================================================
-
-def is_quota_error(error_text):
-
-    text = str(error_text).lower()
-
-    keywords = [
-        "insufficient_quota",
-        "credit_balance_exhausted",
-        "credit balance",
-        "quota",
-        "no credits remaining",
-        "billing",
-        "exceeded your current quota",
-        "429",
-    ]
-
-    return any(
-        keyword in text
-        for keyword in keywords
-    )
-
-
-def is_auth_error(error_text):
-
-    text = str(error_text).lower()
-
-    keywords = [
-        "invalid api key",
-        "incorrect api key",
-        "authentication",
-        "unauthorized",
-        "401",
-        "api key",
-    ]
-
-    return any(
-        keyword in text
-        for keyword in keywords
-    )
-
-
-def is_model_error(error_text):
-
-    text = str(error_text).lower()
-
-    keywords = [
-        "model_not_found",
-        "model not found",
-        "does not exist",
-        "do not have access",
-        "no access",
-    ]
-
-    return any(
-        keyword in text
-        for keyword in keywords
-    )
-
-
-# ============================================================
-# OPENAI ERROR DISPLAY
-# ============================================================
-
-def show_openai_error(error):
-
-    error_text = str(error)
-
-    st.session_state.mode = "Demo Mode"
-
-    st.session_state.last_error = error_text
-
-
-    if is_quota_error(error_text):
-
-        st.warning(
-            "⚠️ OpenAI API credits are unavailable "
-            "or exhausted."
-        )
-
-        st.info(
-            "BAITHAK WITH AI has automatically "
-            "switched to Demo Mode."
-        )
-
-
-    elif is_auth_error(error_text):
-
-        st.warning(
-            "⚠️ Your OpenAI API credential "
-            "could not be verified."
-        )
-
-        st.info(
-            "Please check OPENAI_API_KEY "
-            "in Streamlit Secrets."
-        )
-
-
-    elif is_model_error(error_text):
-
-        st.warning(
-            "⚠️ The selected OpenAI model "
-            "is unavailable."
-        )
-
-        st.info(
-            "BAITHAK WITH AI has switched "
-            "to Demo Mode."
-        )
-
-
-    else:
-
-        st.warning(
-            "⚠️ OpenAI service is temporarily "
-            "unavailable."
-        )
-
-        st.info(
-            "BAITHAK WITH AI has switched "
-            "to Demo Mode."
-        )
-
-
-# ============================================================
-# DEMO MODE
-# ============================================================
-
-def demo_response(prompt):
-
-    text = prompt.lower().strip()
-
-
-    if any(
-        word in text
-        for word in [
-            "hello",
-            "hi",
-            "salam",
-            "assalam",
-            "hey",
-        ]
-    ):
-
+    if any(word in question_lower for word in ["hello", "hi", "salam", "assalam"]):
         return (
-            "Wa Alaikum Assalam! 👋\n\n"
-            "Welcome to BAITHAK WITH AI. "
-            "I am ready to help you with AI, "
-            "programming, robotics, technology "
-            "and learning."
+            "Hello! 👋 Welcome to Baithak With AI. "
+            "I am currently running in Trial/Demo Mode. "
+            "You can ask me questions, and I will try my best to help."
         )
 
-
-    if (
-        "who are you" in text
-        or "what are you" in text
-    ):
-
+    if "your name" in question_lower:
         return (
-            "I am BAITHAK WITH AI 🤖, an AI "
-            "assistant designed to communicate "
-            "with users through text and voice."
+            "My name is Baithak With AI. 🤖 "
+            "I am your intelligent voice and text assistant."
         )
 
-
-    if (
-        "artificial intelligence" in text
-        or text == "ai"
-    ):
-
+    if "python" in question_lower:
         return (
-            "Artificial Intelligence is the field "
-            "of creating computer systems capable "
-            "of performing tasks that normally "
-            "require human intelligence."
+            "Python is a beginner-friendly programming language "
+            "widely used for AI, data science, automation, web apps, "
+            "and smart systems."
         )
 
-
-    if "python" in text:
-
+    if "streamlit" in question_lower:
         return (
-            "Python is a high-level programming "
-            "language widely used for AI, automation, "
-            "data science, robotics and web "
-            "applications."
+            "Streamlit is a Python framework that makes it easy "
+            "to build interactive data and AI web applications."
         )
 
-
-    if (
-        "robot" in text
-        or "robotics" in text
-    ):
-
+    if "ai" in question_lower:
         return (
-            "Robotics combines mechanical engineering, "
-            "electronics, sensors, control systems "
-            "and software to create intelligent machines."
+            "Artificial Intelligence enables computer systems to "
+            "perform tasks that normally require human intelligence, "
+            "such as understanding language, recognizing patterns, "
+            "and making predictions."
         )
-
-
-    if (
-        "study" in text
-        or "learn" in text
-    ):
-
-        return (
-            "A practical learning strategy is:\n\n"
-            "1. Define your goal.\n"
-            "2. Learn the fundamentals.\n"
-            "3. Practice with small projects.\n"
-            "4. Build a real-world project.\n"
-            "5. Review and improve regularly."
-        )
-
-
-    if "career" in text:
-
-        return (
-            "For a technology career, focus on "
-            "fundamentals, practical projects, "
-            "communication skills and a strong "
-            "portfolio."
-        )
-
 
     return (
-        "🤖 Demo Mode is active.\n\n"
-        "I can help with AI, Python, robotics, "
-        "technology, education and productivity.\n\n"
-        "For full AI-powered responses, add "
-        "OPENAI_API_KEY to Streamlit Secrets."
+        "I am currently operating in Trial/Demo Mode. 🤖\n\n"
+        "Please configure your OPENAI_API_KEY in Streamlit Secrets "
+        "to enable full AI-powered responses."
     )
 
 
 # ============================================================
-# OPENAI TEXT RESPONSE
+# TEXT AI RESPONSE
 # ============================================================
 
-def ask_openai(prompt):
+def generate_ai_response(question):
 
-    client = create_openai_client()
+    if not question or not question.strip():
+        return "Please enter a question."
 
     if client is None:
 
-        raise RuntimeError(
-            "OpenAI API key is not configured."
-        )
+        return demo_response(question)
 
+    try:
 
-    conversation = []
+        recent_messages = st.session_state.messages[-12:]
 
+        conversation = []
 
-    for message in st.session_state.messages[-12:]:
+        for item in recent_messages:
 
-        role = message.get("role")
-
-        if role not in [
-            "user",
-            "assistant",
-        ]:
-            continue
-
+            conversation.append(
+                {
+                    "role": item["role"],
+                    "content": item["content"]
+                }
+            )
 
         conversation.append(
             {
-                "role": role,
-                "content": message.get(
-                    "content",
-                    "",
-                ),
+                "role": "user",
+                "content": question
             }
         )
 
+        response = client.responses.create(
+            model=OPENAI_MODEL,
 
-    conversation.append(
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    )
+            instructions=(
+                "You are Baithak With AI, a friendly, intelligent "
+                "and professional AI assistant. "
+                "Answer clearly and naturally. "
+                "Use simple language when appropriate. "
+                "You may respond in English, Urdu, or Roman Urdu "
+                "according to the user's language. "
+                "Do not claim to be a human. "
+                "Keep answers useful and reasonably concise."
+            ),
 
-
-    response = client.responses.create(
-
-        model=OPENAI_MODEL,
-
-        instructions=SYSTEM_PROMPT,
-
-        input=conversation,
-    )
-
-
-    answer = getattr(
-        response,
-        "output_text",
-        None,
-    )
-
-
-    if not answer:
-
-        raise RuntimeError(
-            "OpenAI returned an empty response."
+            input=conversation
         )
 
+        answer = response.output_text
 
-    return answer.strip()
+        if not answer:
+            return "I could not generate a response. Please try again."
+
+        return answer
+
+    except Exception as e:
+
+        st.session_state.last_error = str(e)
+
+        return (
+            "⚠️ I encountered an AI service error.\n\n"
+            "Please check your OpenAI API key, model configuration, "
+            "API credits, and internet connection."
+        )
 
 
 # ============================================================
@@ -1565,107 +1432,50 @@ def ask_openai(prompt):
 
 def transcribe_audio(audio_file):
 
-    client = create_openai_client()
+    if audio_file is None:
+        return ""
 
     if client is None:
 
-        raise RuntimeError(
-            "OpenAI API key is not configured."
+        return (
+            "Voice transcription requires an OpenAI API key. "
+            "Please configure OPENAI_API_KEY in Streamlit Secrets."
         )
-
-
-    audio_bytes = audio_file.getvalue()
-
-
-    if not audio_bytes:
-
-        raise RuntimeError(
-            "The microphone recording is empty."
-        )
-
-
-    mime_type = getattr(
-        audio_file,
-        "type",
-        "audio/wav",
-    )
-
-
-    extension = ".wav"
-
-
-    if "webm" in mime_type:
-
-        extension = ".webm"
-
-    elif "ogg" in mime_type:
-
-        extension = ".ogg"
-
-    elif "mp4" in mime_type:
-
-        extension = ".mp4"
-
-    elif "mpeg" in mime_type:
-
-        extension = ".mp3"
-
-
-    temp_path = None
-
 
     try:
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=extension,
-        ) as temp_file:
-
-            temp_file.write(
-                audio_bytes
-            )
-
-            temp_path = (
-                temp_file.name
-            )
-
+        audio_bytes = audio_file.getvalue()
 
         with open(
-            temp_path,
-            "rb",
+            "temporary_voice_input.wav",
+            "wb"
+        ) as f:
+
+            f.write(audio_bytes)
+
+        with open(
+            "temporary_voice_input.wav",
+            "rb"
         ) as audio:
 
-            result = (
-                client.audio.transcriptions.create(
-                    model=TRANSCRIPTION_MODEL,
-                    file=audio,
-                )
+            transcription = client.audio.transcriptions.create(
+                model=TRANSCRIPTION_MODEL,
+                file=audio
             )
 
-
-        transcript = getattr(
-            result,
+        text = getattr(
+            transcription,
             "text",
-            "",
+            ""
         )
 
+        return text.strip()
 
-        return transcript.strip()
+    except Exception as e:
 
+        st.session_state.last_error = str(e)
 
-    finally:
-
-        if temp_path:
-
-            try:
-
-                os.remove(
-                    temp_path
-                )
-
-            except Exception:
-
-                pass
+        return ""
 
 
 # ============================================================
@@ -1674,60 +1484,29 @@ def transcribe_audio(audio_file):
 
 def generate_speech(text):
 
-    client = create_openai_client()
+    if not text:
+        return None
 
     if client is None:
+        return None
 
-        raise RuntimeError(
-            "OpenAI API key is not configured."
+    try:
+
+        speech_response = client.audio.speech.create(
+            model=TTS_MODEL,
+            voice=TTS_VOICE,
+            input=text
         )
 
+        audio_bytes = speech_response.read()
 
-    response = client.audio.speech.create(
+        return audio_bytes
 
-        model=TTS_MODEL,
+    except Exception as e:
 
-        voice=TTS_VOICE,
+        st.session_state.last_error = str(e)
 
-        input=text[:4000],
-    )
-
-
-    return response.read()
-
-
-# ============================================================
-# PROPER STREAMLIT HEADER
-# ============================================================
-
-st.title(
-    "🤖 BAITHAK WITH AI"
-)
-
-st.subheader(
-    "Your Intelligent Voice & Text AI Assistant"
-)
-
-st.caption(
-    "Speak naturally, type your question, "
-    "and interact with your AI assistant."
-)
-
-
-# ============================================================
-# ROBOT
-# ============================================================
-
-show_animated_robot()
-
-
-# ============================================================
-# APPLICATION FLOW
-# ============================================================
-
-st.info(
-    "🎤 Speech → 🧠 OpenAI → 💬 AI Response → 🔊 Voice"
-)
+        return None
 
 
 # ============================================================
@@ -1736,516 +1515,453 @@ st.info(
 
 with st.sidebar:
 
-    st.header(
-        "🤖 BAITHAK WITH AI"
-    )
-
-
-    st.subheader(
-        "⚙️ AI Configuration"
-    )
-
-
-    mode_options = [
-        "Demo Mode",
-        "OpenAI API Mode",
-    ]
-
-
-    selected_mode = st.radio(
-
-        "Operating Mode",
-
-        mode_options,
-
-        index=(
-            1
-            if (
-                st.session_state.mode
-                == "OpenAI API Mode"
-                and OPENAI_API_KEY
-            )
-            else 0
-        ),
-    )
-
-
-    if selected_mode == "OpenAI API Mode":
-
-        if OPENAI_API_KEY:
-
-            st.success(
-                "🟢 OpenAI API Key detected"
-            )
-
-            st.caption(
-                f"Model: {OPENAI_MODEL}"
-            )
-
-            st.session_state.mode = (
-                "OpenAI API Mode"
-            )
-
-        else:
-
-            st.warning(
-                "⚠️ Add OPENAI_API_KEY "
-                "in Streamlit Secrets."
-            )
-
-            st.session_state.mode = (
-                "Demo Mode"
-            )
-
-
-    else:
-
-        st.session_state.mode = (
-            "Demo Mode"
-        )
-
-        st.info(
-            "🟡 Demo Mode active"
-        )
-
+    st.header("⚙️ Baithak Settings")
 
     st.divider()
 
+    st.subheader("AI Mode")
 
-    st.subheader(
-        "📋 Current Status"
-    )
-
-
-    if (
-        st.session_state.mode
-        == "OpenAI API Mode"
-    ):
+    if client:
 
         st.success(
-            "🧠 OpenAI API Mode"
+            "🟢 OpenAI Connected"
         )
 
     else:
 
-        st.info(
-            "🤖 Demo Mode"
+        st.warning(
+            "🟡 Trial / Demo Mode"
         )
 
+    st.caption(
+        f"Model: `{OPENAI_MODEL}`"
+    )
 
     st.divider()
 
+    st.subheader("🎙️ Voice")
+
+    voice_enabled = st.toggle(
+        "Enable AI Voice Response",
+        value=True
+    )
+
+    st.divider()
+
+    st.subheader("🧹 Conversation")
 
     if st.button(
-        "🗑️ Clear Conversation",
-        use_container_width=True,
+        "Clear Chat",
+        use_container_width=True
     ):
 
         st.session_state.messages = []
-
         st.session_state.last_answer = ""
-
         st.session_state.voice_audio = None
 
         st.rerun()
 
+    st.divider()
+
+    st.subheader("ℹ️ About")
+
+    st.write(
+        """
+        **BAITHAK WITH AI** is an AI-powered
+        voice and text assistant.
+
+        You can:
+
+        🎤 Speak through your microphone
+
+        💬 Type questions
+
+        🤖 Get AI responses
+
+        🔊 Listen to AI responses
+
+        🧪 Test the application in Trial Mode
+        """
+    )
 
     st.divider()
 
-
-    st.subheader(
-        "🎤 Voice Pipeline"
+    st.caption(
+        "BAITHAK WITH AI • Trial Edition"
     )
 
+
+# ============================================================
+# MAIN HEADER
+# ============================================================
+
+st.title("🤖 BAITHAK WITH AI")
+
+st.subheader(
+    "Your Intelligent Voice & Text AI Assistant"
+)
+
+st.caption(
+    "Speak naturally, type your question, and interact with your AI assistant."
+)
+
+
+# ============================================================
+# STATUS
+# ============================================================
+
+status_col1, status_col2, status_col3 = st.columns(3)
+
+with status_col1:
+
+    if client:
+
+        st.markdown(
+            '<div class="status-online">'
+            '🟢 AI ONLINE'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            '<div class="status-demo">'
+            '🧪 TRIAL MODE'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+
+with status_col2:
 
     st.markdown(
-        """
-        **Speech**
-
-        ↓
-
-        **OpenAI Transcription**
-
-        ↓
-
-        **AI Response**
-
-        ↓
-
-        **OpenAI Text-to-Speech**
-
-        ↓
-
-        🔊 **Voice**
-        """
+        '<div class="status-online">'
+        '🎤 VOICE READY'
+        '</div>',
+        unsafe_allow_html=True
     )
 
 
-# ============================================================
-# MODE STATUS
-# ============================================================
+with status_col3:
 
-if (
-    st.session_state.mode
-    == "OpenAI API Mode"
-):
-
-    st.success(
-        f"🧠 OpenAI API Mode Active • "
-        f"{OPENAI_MODEL}"
+    st.markdown(
+        '<div class="status-online">'
+        '💬 CHAT READY'
+        '</div>',
+        unsafe_allow_html=True
     )
 
-else:
+
+st.divider()
+
+
+# ============================================================
+# ROBOT SECTION
+# ============================================================
+
+robot_col, intro_col = st.columns(
+    [1.1, 1],
+    gap="large"
+)
+
+with robot_col:
+
+    show_animated_robot()
+
+
+with intro_col:
+
+    st.header("Welcome to Baithak 👋")
+
+    st.write(
+        """
+        Baithak With AI is your intelligent digital
+        conversation partner.
+
+        You can communicate with Baithak using
+        **text or your microphone**.
+        """
+    )
 
     st.info(
-        "🤖 Demo Mode Active — "
-        "Add your OpenAI credentials "
-        "to enable full AI."
+        "🎤 Use the microphone below to speak with Baithak."
     )
 
+    st.info(
+        "💬 Or type your question in the chat box."
+    )
+
+    if client:
+
+        st.success(
+            "OpenAI AI services are connected."
+        )
+
+    else:
+
+        st.warning(
+            "Trial Mode is active. Configure "
+            "`OPENAI_API_KEY` in Streamlit Secrets "
+            "for full AI functionality."
+        )
+
+
+st.divider()
+
 
 # ============================================================
-# VOICE ASSISTANT
+# VOICE INPUT
 # ============================================================
 
-st.header(
-    "🎤 Voice Assistant"
-)
+st.header("🎤 Talk to Baithak")
 
 st.write(
-    "Record your question using your microphone. "
-    "BAITHAK WITH AI will convert your speech "
-    "into text and generate an AI response."
+    "Click the microphone, speak naturally, and submit your voice message."
 )
-
 
 audio_input = st.audio_input(
-    "🎤 Record your question"
+    "Record your voice"
 )
 
-
-# ============================================================
-# VOICE PROCESSING
-# ============================================================
 
 if audio_input is not None:
 
+    st.session_state.voice_audio = audio_input
+
     st.audio(
-        audio_input,
-        format=(
-            audio_input.type
-            if audio_input.type
-            else "audio/wav"
-        ),
+        audio_input
     )
 
-
-    if st.button(
-        "🧠 Convert Speech to AI Response",
-        use_container_width=True,
-    ):
-
-        if not OPENAI_API_KEY:
-
-            st.warning(
-                "⚠️ Kindly add your OpenAI API "
-                "credentials in Streamlit Secrets."
-            )
-
-            st.info(
-                "Speech-to-text requires "
-                "OpenAI API access."
-            )
-
-        else:
-
-            with st.spinner(
-                "🎤 Converting speech to text..."
-            ):
-
-                try:
-
-                    transcript = (
-                        transcribe_audio(
-                            audio_input
-                        )
-                    )
-
-
-                    if not transcript:
-
-                        st.warning(
-                            "⚠️ No speech was detected."
-                        )
-
-                    else:
-
-                        st.success(
-                            f"📝 You said: "
-                            f"{transcript}"
-                        )
-
-
-                        st.session_state.messages.append(
-                            {
-                                "role": "user",
-                                "content": transcript,
-                            }
-                        )
-
-
-                        try:
-
-                            answer = ask_openai(
-                                transcript
-                            )
-
-                        except Exception as error:
-
-                            show_openai_error(
-                                error
-                            )
-
-                            answer = demo_response(
-                                transcript
-                            )
-
-
-                        st.session_state.messages.append(
-                            {
-                                "role": "assistant",
-                                "content": answer,
-                            }
-                        )
-
-
-                        st.session_state.last_answer = (
-                            answer
-                        )
-
-                        st.session_state.voice_audio = (
-                            None
-                        )
-
-
-                        st.rerun()
-
-
-                except Exception as error:
-
-                    show_openai_error(
-                        error
-                    )
-
-
-# ============================================================
-# CONVERSATION
-# ============================================================
-
-if st.session_state.messages:
-
-    st.header(
-        "💬 Conversation"
+    voice_col1, voice_col2 = st.columns(
+        [1, 1]
     )
 
+    with voice_col1:
 
-    for message in st.session_state.messages:
-
-        role = message.get(
-            "role"
-        )
-
-        content = message.get(
-            "content",
-            "",
-        )
-
-
-        if role == "user":
-
-            with st.chat_message(
-                "user",
-                avatar="👤",
-            ):
-
-                st.markdown(
-                    content
-                )
-
-
-        elif role == "assistant":
-
-            with st.chat_message(
-                "assistant",
-                avatar="🤖",
-            ):
-
-                st.markdown(
-                    content
-                )
-
-
-# ============================================================
-# TEXT CHAT
-# ============================================================
-
-st.header(
-    "💬 Text Chat"
-)
-
-
-prompt = st.chat_input(
-    "Type your message here..."
-)
-
-
-if prompt:
-
-    prompt = prompt.strip()
-
-
-    if prompt:
-
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        )
-
-
-        if (
-            st.session_state.mode
-            == "OpenAI API Mode"
+        if st.button(
+            "🎙️ Process Voice",
+            use_container_width=True,
+            type="primary"
         ):
 
             with st.spinner(
-                "🧠 BAITHAK WITH AI is thinking..."
+                "Listening and converting your voice..."
             ):
 
-                try:
+                transcript = transcribe_audio(
+                    audio_input
+                )
 
-                    answer = ask_openai(
-                        prompt
+            if transcript:
+
+                st.session_state.messages.append(
+                    {
+                        "role": "user",
+                        "content": transcript
+                    }
+                )
+
+                with st.spinner(
+                    "Baithak is thinking..."
+                ):
+
+                    answer = generate_ai_response(
+                        transcript
                     )
 
-                except Exception as error:
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": answer
+                    }
+                )
 
-                    show_openai_error(
-                        error
-                    )
+                st.session_state.last_answer = answer
 
-                    answer = demo_response(
-                        prompt
-                    )
+                if voice_enabled and client:
 
-        else:
+                    with st.spinner(
+                        "Generating voice response..."
+                    ):
 
-            answer = demo_response(
-                prompt
-            )
+                        audio_bytes = generate_speech(
+                            answer
+                        )
 
+                    st.session_state.voice_audio = audio_bytes
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": answer,
-            }
-        )
+                st.rerun()
 
+    with voice_col2:
 
-        st.session_state.last_answer = (
-            answer
-        )
+        if st.button(
+            "🗑️ Remove Voice",
+            use_container_width=True
+        ):
 
-        st.session_state.voice_audio = (
-            None
-        )
+            st.session_state.voice_audio = None
 
-
-        st.rerun()
+            st.rerun()
 
 
 # ============================================================
-# TEXT TO SPEECH
+# LAST AI VOICE RESPONSE
 # ============================================================
 
-if st.session_state.last_answer:
+if (
+    st.session_state.voice_audio
+    and isinstance(
+        st.session_state.voice_audio,
+        bytes
+    )
+):
 
-    st.header(
-        "🔊 AI Voice Response"
+    st.subheader(
+        "🔊 Baithak's Voice Response"
+    )
+
+    st.audio(
+        st.session_state.voice_audio,
+        format="audio/mp3"
     )
 
 
-    st.write(
-        "Convert the latest AI response "
-        "into natural speech using "
-        "OpenAI Text-to-Speech."
+st.divider()
+
+
+# ============================================================
+# CHAT
+# ============================================================
+
+st.header("💬 Chat with Baithak")
+
+
+if not st.session_state.messages:
+
+    st.info(
+        "👋 Start a conversation by typing a message below "
+        "or use the microphone above."
     )
 
 
-    if st.button(
-        "🔊 Speak Latest AI Response",
-        use_container_width=True,
+# ============================================================
+# DISPLAY CHAT HISTORY
+# ============================================================
+
+for message in st.session_state.messages:
+
+    role = message["role"]
+
+    content = message["content"]
+
+    if role == "user":
+
+        with st.chat_message(
+            "user",
+            avatar="👤"
+        ):
+
+            st.markdown(content)
+
+    else:
+
+        with st.chat_message(
+            "assistant",
+            avatar="🤖"
+        ):
+
+            st.markdown(content)
+
+
+# ============================================================
+# CHAT INPUT
+# ============================================================
+
+user_prompt = st.chat_input(
+    "Type your message to Baithak..."
+)
+
+
+if user_prompt:
+
+    # Add user message
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": user_prompt
+        }
+    )
+
+    # Display immediately
+    with st.chat_message(
+        "user",
+        avatar="👤"
     ):
 
-        if not OPENAI_API_KEY:
+        st.markdown(user_prompt)
 
-            st.warning(
-                "⚠️ Kindly add your OpenAI API "
-                "credentials in Streamlit Secrets."
+    # Generate answer
+    with st.chat_message(
+        "assistant",
+        avatar="🤖"
+    ):
+
+        with st.spinner(
+            "Baithak is thinking..."
+        ):
+
+            answer = generate_ai_response(
+                user_prompt
             )
 
-        else:
+        st.markdown(answer)
 
-            with st.spinner(
-                "🔊 Generating AI voice..."
-            ):
+    # Save answer
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": answer
+        }
+    )
 
-                try:
+    st.session_state.last_answer = answer
 
-                    voice_data = (
-                        generate_speech(
-                            st.session_state.last_answer
-                        )
-                    )
+    # Generate voice
+    if voice_enabled and client:
 
+        with st.spinner(
+            "Preparing voice response..."
+        ):
 
-                    st.session_state.voice_audio = (
-                        voice_data
-                    )
+            audio_bytes = generate_speech(
+                answer
+            )
 
+        if audio_bytes:
 
-                except Exception as error:
+            st.session_state.voice_audio = audio_bytes
 
-                    show_openai_error(
-                        error
-                    )
+            st.audio(
+                audio_bytes,
+                format="audio/mp3"
+            )
 
-
-    if st.session_state.voice_audio:
-
-        st.audio(
-            st.session_state.voice_audio,
-            format="audio/mp3",
-        )
+    st.rerun()
 
 
-        st.download_button(
+# ============================================================
+# ERROR INFORMATION
+# ============================================================
 
-            label="⬇️ Download AI Voice",
+if st.session_state.last_error:
 
-            data=(
-                st.session_state.voice_audio
-            ),
+    with st.expander(
+        "⚠️ Technical Information"
+    ):
 
-            file_name=(
-                "baithak_ai_response.mp3"
-            ),
-
-            mime="audio/mpeg",
-
-            use_container_width=True,
+        st.code(
+            st.session_state.last_error
         )
 
 
@@ -2253,19 +1969,19 @@ if st.session_state.last_answer:
 # FOOTER
 # ============================================================
 
-current_year = datetime.now().year
-
-
 st.divider()
 
-
-st.caption(
-    f"BAITHAK WITH AI • OpenAI Powered • {current_year}"
-)
-
-
 st.markdown(
-    "**Designed by Certified Generative and "
-    "Agentic AI Application Developer — "
-    "Engr. Bilal Mehmood**"
+    """
+    <div class="footer">
+
+        🤖 <b>BAITHAK WITH AI</b><br>
+
+        Intelligent Voice & Text AI Assistant<br>
+
+        🧪 Trial Edition • Powered by AI
+
+    </div>
+    """,
+    unsafe_allow_html=True
 )
