@@ -1,6 +1,6 @@
-
 import os
 import base64
+
 import streamlit as st
 import streamlit.components.v1 as components
 from openai import OpenAI
@@ -9,6 +9,12 @@ from openai import OpenAI
 # ============================================================
 # BAITHAK WITH AI
 # Intelligent Talking Robot Assistant
+# DEMO MODE + OPENAI GPT-6 LUNA API MODE
+# ============================================================
+
+
+# ============================================================
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -23,9 +29,12 @@ st.set_page_config(
 # CONFIGURATION
 # ============================================================
 
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-6-luna"
+
 DEFAULT_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
+
 DEFAULT_VOICE_MODEL = "gpt-4o-mini-tts"
+
 
 SYSTEM_PROMPT = """
 You are BAITHAK WITH AI.
@@ -39,43 +48,60 @@ Personality:
 - Helpful
 - Respectful
 - Professional
-- Conversational
 - Warm
+- Conversational
 
 Languages:
 - English
 - Urdu
 - Roman Urdu
 
-If the user speaks Urdu, answer naturally in Urdu or Roman Urdu.
-If the user speaks English, answer in English.
+Language behavior:
+- If the user speaks English, answer in English.
+- If the user speaks Urdu, answer naturally in Urdu.
+- If the user uses Roman Urdu, answer naturally in Roman Urdu.
+- Do not unnecessarily change the user's language.
 
-Keep ordinary answers concise.
-Provide detailed answers when requested.
-
-Never claim that you performed a real-world action unless the
-application actually performed it.
+Response behavior:
+- Keep ordinary answers concise.
+- Give detailed answers when requested.
+- Be technically accurate.
+- Never claim that a real-world action was completed
+  unless the application actually performed it.
 """
 
 
 # ============================================================
-# SECRET / ENVIRONMENT VARIABLE
+# SECRET LOADER
 # ============================================================
 
 def get_secret(name, default=""):
+
     try:
+
         value = st.secrets.get(name)
 
         if value:
+
             return str(value).strip()
 
     except Exception:
+
         pass
 
-    return os.getenv(name, default)
+    return os.getenv(
+        name,
+        default
+    )
 
 
-OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+# ============================================================
+# OPENAI SETTINGS
+# ============================================================
+
+OPENAI_API_KEY = get_secret(
+    "OPENAI_API_KEY"
+)
 
 OPENAI_MODEL = get_secret(
     "OPENAI_MODEL",
@@ -102,11 +128,13 @@ client = None
 if OPENAI_API_KEY:
 
     try:
+
         client = OpenAI(
             api_key=OPENAI_API_KEY
         )
 
     except Exception:
+
         client = None
 
 
@@ -115,20 +143,30 @@ if OPENAI_API_KEY:
 # ============================================================
 
 if "conversation" not in st.session_state:
+
     st.session_state.conversation = []
 
-if "last_answer" not in st.session_state:
-    st.session_state.last_answer = ""
 
 if "last_audio" not in st.session_state:
+
     st.session_state.last_audio = None
 
+
+if "mode" not in st.session_state:
+
+    st.session_state.mode = "Demo Mode"
+
+
 if "api_error" not in st.session_state:
+
     st.session_state.api_error = ""
 
 
 # ============================================================
 # GLOBAL CSS
+# IMPORTANT:
+# Only normal Streamlit CSS here.
+# Robot + footer HTML are rendered separately.
 # ============================================================
 
 st.markdown(
@@ -136,27 +174,34 @@ st.markdown(
 <style>
 
 @import url(
-    'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap'
+'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap'
 );
+
 
 html,
 body,
 [class*="css"] {
-    font-family: 'Orbitron', sans-serif;
+
+    font-family:
+        'Orbitron',
+        sans-serif;
+
 }
+
 
 .stApp {
 
     background:
+
         radial-gradient(
             circle at 50% 10%,
-            rgba(0, 220, 255, 0.16),
+            rgba(0,220,255,.16),
             transparent 30%
         ),
 
         radial-gradient(
             circle at 10% 90%,
-            rgba(0, 255, 160, 0.08),
+            rgba(0,255,160,.08),
             transparent 30%
         ),
 
@@ -174,7 +219,8 @@ body,
 
     text-align: center;
 
-    font-size: clamp(32px, 5vw, 60px);
+    font-size:
+        clamp(32px, 5vw, 60px);
 
     font-weight: 800;
 
@@ -183,9 +229,13 @@ body,
     color: #00eaff;
 
     text-shadow:
+
         0 0 10px #00eaff,
+
         0 0 25px #00eaff,
-        0 0 55px rgba(0,234,255,.55);
+
+        0 0 55px
+        rgba(0,234,255,.55);
 
     margin-top: 5px;
 }
@@ -211,9 +261,12 @@ body,
 
 .chat-panel {
 
-    background: rgba(7,18,35,.75);
+    background:
+        rgba(7,18,35,.75);
 
-    border: 1px solid rgba(0,234,255,.25);
+    border:
+        1px solid
+        rgba(0,234,255,.25);
 
     border-radius: 20px;
 
@@ -223,120 +276,211 @@ body,
 
 
 /* ==========================================================
-   FOOTER
+   MODE BADGE
    ========================================================== */
 
-.baithak-footer {
+.mode-demo {
 
-    margin-top: 45px;
+    padding: 10px;
 
-    padding: 28px 15px;
+    border-radius: 12px;
 
-    text-align: center;
-
-    border-top: 1px solid rgba(0,234,255,.25);
+    border:
+        1px solid
+        rgba(255,193,7,.5);
 
     background:
-        linear-gradient(
-            180deg,
-            rgba(0,234,255,.02),
-            rgba(0,234,255,.08)
-        );
+        rgba(255,193,7,.08);
+
 }
 
 
-.footer-title {
+.mode-api {
 
-    font-size: 16px;
+    padding: 10px;
 
-    font-weight: 700;
+    border-radius: 12px;
 
-    letter-spacing: 2px;
+    border:
+        1px solid
+        rgba(0,255,174,.5);
 
-    color: #00eaff;
+    background:
+        rgba(0,255,174,.08);
 
-    text-shadow:
-        0 0 10px rgba(0,234,255,.6);
-}
-
-
-.footer-name {
-
-    margin-top: 10px;
-
-    font-size: 18px;
-
-    font-weight: 800;
-
-    color: white;
-}
-
-
-.footer-line {
-
-    margin-top: 12px;
-
-    font-size: 12px;
-
-    color: #7fa0b3;
-
-    letter-spacing: 1px;
-}
-
-
-.footer-tech {
-
-    margin-top: 15px;
-
-    color: #00ffae;
-
-    font-size: 12px;
 }
 
 </style>
 """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# FUNCTIONS
+# DEMO AI
+# ============================================================
+
+def demo_response(user_text):
+
+    text = user_text.lower().strip()
+
+
+    # --------------------------------------------------------
+    # GREETING
+    # --------------------------------------------------------
+
+    if any(
+        word in text
+        for word in [
+            "hello",
+            "hi",
+            "salam",
+            "assalam",
+            "aoa"
+        ]
+    ):
+
+        return (
+            "وعلیکم السلام! 🤖\n\n"
+            "میں BAITHAK WITH AI ہوں۔ "
+            "آپ مجھ سے English، Urdu یا Roman Urdu "
+            "میں بات کر سکتے ہیں۔\n\n"
+            "How can I help you today?"
+        )
+
+
+    # --------------------------------------------------------
+    # IDENTITY
+    # --------------------------------------------------------
+
+    if (
+        "who are you" in text
+        or "tum kon" in text
+        or "aap kon" in text
+        or "آپ کون" in text
+    ):
+
+        return (
+            "میں BAITHAK WITH AI ہوں — ایک intelligent "
+            "talking AI companion۔ 🤖\n\n"
+            "میں English، Urdu اور Roman Urdu میں "
+            "آپ کے ساتھ conversational انداز میں بات کر سکتا ہوں۔"
+        )
+
+
+    # --------------------------------------------------------
+    # DEMO MODE
+    # --------------------------------------------------------
+
+    if (
+        "demo" in text
+        or "api" in text
+        or "mode" in text
+    ):
+
+        return (
+            "آپ اس وقت BAITHAK WITH AI کے Demo Mode میں ہیں۔\n\n"
+            "Demo Mode API key کے بغیر بھی کام کرتا ہے۔ "
+            "اگر OpenAI API Mode استعمال کرنا ہو تو "
+            "OPENAI_API_KEY کو Streamlit Secrets میں add کریں۔"
+        )
+
+
+    # --------------------------------------------------------
+    # PYTHON
+    # --------------------------------------------------------
+
+    if "python" in text:
+
+        return (
+            "Python ایک high-level programming language ہے "
+            "جو AI، Machine Learning، Automation، Data Science "
+            "اور Web Development میں بہت استعمال ہوتی ہے۔ 🐍"
+        )
+
+
+    # --------------------------------------------------------
+    # AI
+    # --------------------------------------------------------
+
+    if (
+        "artificial intelligence" in text
+        or text == "ai"
+        or "what is ai" in text
+    ):
+
+        return (
+            "Artificial Intelligence یعنی AI ایسی technology ہے "
+            "جس کے ذریعے computer systems انسانی intelligence "
+            "سے متعلق tasks perform کر سکتے ہیں، جیسے reasoning، "
+            "language understanding، vision اور decision making۔"
+        )
+
+
+    # --------------------------------------------------------
+    # ROBOT
+    # --------------------------------------------------------
+
+    if "robot" in text:
+
+        return (
+            "Robot ایک programmable machine ہے جو sensors، "
+            "controllers، software اور actuators استعمال کر کے "
+            "physical world میں actions perform کر سکتا ہے۔ 🤖"
+        )
+
+
+    # --------------------------------------------------------
+    # URDU
+    # --------------------------------------------------------
+
+    if (
+        "کیا حال" in text
+        or "آپ کیسے" in text
+        or "تم کیسے" in text
+    ):
+
+        return (
+            "الحمدللہ، میں بالکل ٹھیک ہوں! 🤖\n\n"
+            "آپ بتائیں، میں BAITHAK میں آپ کی کیا مدد کر سکتا ہوں؟"
+        )
+
+
+    # --------------------------------------------------------
+    # DEFAULT
+    # --------------------------------------------------------
+
+    return (
+        "🤖 Demo Mode:\n\n"
+        f"آپ نے پوچھا: {user_text}\n\n"
+        "میں Demo Mode میں اس request کا simulated جواب دے رہا ہوں۔ "
+        "زیادہ intelligent اور detailed جواب کے لیے OpenAI API Mode "
+        "اور GPT-6 Luna استعمال کریں۔"
+    )
+
+
+# ============================================================
+# AI REQUEST
 # ============================================================
 
 def ask_ai(user_text):
 
-    if client is None:
+    # --------------------------------------------------------
+    # DEMO MODE
+    # --------------------------------------------------------
 
-        return (
-            "⚠️ OpenAI is not connected.\n\n"
-            "Please add OPENAI_API_KEY to Streamlit Secrets."
+    if st.session_state.mode == "Demo Mode":
+
+        answer = demo_response(
+            user_text
         )
 
-    user_message = {
-        "role": "user",
-        "content": user_text
-    }
-
-    st.session_state.conversation.append(
-        user_message
-    )
-
-    history = st.session_state.conversation[-20:]
-
-    try:
-
-        response = client.responses.create(
-            model=OPENAI_MODEL,
-            instructions=SYSTEM_PROMPT,
-            input=history,
+        st.session_state.conversation.append(
+            {
+                "role": "user",
+                "content": user_text
+            }
         )
-
-        answer = response.output_text
-
-        if not answer:
-            answer = (
-                "Sorry, I could not generate a response."
-            )
 
         st.session_state.conversation.append(
             {
@@ -345,11 +489,100 @@ def ask_ai(user_text):
             }
         )
 
-        st.session_state.last_answer = answer
+        return answer
+
+
+    # --------------------------------------------------------
+    # API MODE
+    # --------------------------------------------------------
+
+    if client is None:
+
+        st.session_state.mode = "Demo Mode"
+
+        answer = demo_response(
+            user_text
+        )
+
+        answer = (
+            "⚠️ OpenAI API available نہیں ہے۔ "
+            "Automatically Demo Mode پر switch کر دیا گیا ہے.\n\n"
+            + answer
+        )
+
+        st.session_state.conversation.append(
+            {
+                "role": "user",
+                "content": user_text
+            }
+        )
+
+        st.session_state.conversation.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
+        )
 
         return answer
 
+
+    # --------------------------------------------------------
+    # STORE USER MESSAGE
+    # --------------------------------------------------------
+
+    st.session_state.conversation.append(
+        {
+            "role": "user",
+            "content": user_text
+        }
+    )
+
+
+    history = (
+        st.session_state.conversation[-20:]
+    )
+
+
+    try:
+
+        response = client.responses.create(
+
+            model=OPENAI_MODEL,
+
+            instructions=SYSTEM_PROMPT,
+
+            input=history,
+
+        )
+
+
+        answer = response.output_text
+
+
+        if not answer:
+
+            answer = (
+                "Sorry, I could not generate a response."
+            )
+
+
+        st.session_state.conversation.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
+        )
+
+
+        st.session_state.api_error = ""
+
+        return answer
+
+
     except Exception as error:
+
+        # Remove failed user request
 
         if st.session_state.conversation:
 
@@ -357,14 +590,49 @@ def ask_ai(user_text):
                 st.session_state.conversation[-1]["role"]
                 == "user"
             ):
+
                 st.session_state.conversation.pop()
 
-        st.session_state.api_error = str(error)
 
-        return (
-            "⚠️ OpenAI request failed.\n\n"
-            f"{error}"
+        # Automatic fallback
+
+        st.session_state.mode = "Demo Mode"
+
+        st.session_state.api_error = str(
+            error
         )
+
+
+        demo_answer = demo_response(
+            user_text
+        )
+
+
+        final_answer = (
+            "⚠️ OpenAI API request failed.\n\n"
+            "🔄 BAITHAK automatically switched "
+            "to Demo Mode.\n\n"
+            f"{demo_answer}"
+        )
+
+
+        st.session_state.conversation.append(
+            {
+                "role": "user",
+                "content": user_text
+            }
+        )
+
+
+        st.session_state.conversation.append(
+            {
+                "role": "assistant",
+                "content": final_answer
+            }
+        )
+
+
+        return final_answer
 
 
 # ============================================================
@@ -373,17 +641,30 @@ def ask_ai(user_text):
 
 def transcribe_audio(audio_file):
 
-    if client is None:
-        return None, "OpenAI is not connected."
+    if (
+        client is None
+        or st.session_state.mode != "API Mode"
+    ):
+
+        return None, (
+            "Voice transcription requires "
+            "OpenAI API Mode."
+        )
+
 
     try:
 
         audio_file.seek(0)
 
+
         result = client.audio.transcriptions.create(
+
             model=TRANSCRIPTION_MODEL,
+
             file=audio_file,
+
         )
+
 
         text = getattr(
             result,
@@ -391,10 +672,16 @@ def transcribe_audio(audio_file):
             ""
         )
 
+
         if not text:
-            return None, "No speech was detected."
+
+            return None, (
+                "No speech was detected."
+            )
+
 
         return text.strip(), None
+
 
     except Exception as error:
 
@@ -407,21 +694,36 @@ def transcribe_audio(audio_file):
 
 def create_voice(text):
 
-    if client is None:
-        return None, "OpenAI is not connected."
+    if (
+        client is None
+        or st.session_state.mode != "API Mode"
+    ):
+
+        return None, (
+            "AI Voice requires OpenAI API Mode."
+        )
+
 
     try:
 
         speech = client.audio.speech.create(
+
             model=VOICE_MODEL,
+
             voice="alloy",
+
             input=text,
+
             response_format="mp3",
+
         )
+
 
         audio_bytes = speech.read()
 
+
         return audio_bytes, None
+
 
     except Exception as error:
 
@@ -438,18 +740,28 @@ def make_audio_player(audio_bytes):
         audio_bytes
     ).decode("utf-8")
 
+
     return f"""
-    <audio controls autoplay style="width:100%;">
+    <audio
+        controls
+        autoplay
+        style="width:100%;"
+    >
+
         <source
             src="data:audio/mp3;base64,{encoded}"
             type="audio/mp3"
         >
+
     </audio>
     """
 
 
 # ============================================================
-# ROBOT HTML
+# ROBOT + FOOTER COMPONENT
+# IMPORTANT:
+# ALL RAW HTML IS INSIDE components.html()
+# Therefore Streamlit will not display <div> as text.
 # ============================================================
 
 def render_robot():
@@ -469,24 +781,31 @@ def render_robot():
     box-sizing: border-box;
 }
 
+
 html,
 body {
 
     margin: 0;
+
     padding: 0;
 
     width: 100%;
-    height: 100%;
+
+    min-height: 100%;
 
     background: transparent;
 
     overflow: hidden;
+
+    color: white;
+
+    font-family: Arial, sans-serif;
 }
 
 
-/* ============================================================
-   ROBOT STAGE
-   ============================================================ */
+/* ==========================================================
+   ROBOT CONTAINER
+   ========================================================== */
 
 .robot-container {
 
@@ -494,20 +813,19 @@ body {
 
     width: 100%;
 
-    height: 490px;
+    height: 485px;
 
     display: flex;
 
     justify-content: center;
 
     align-items: center;
-
 }
 
 
-/* ============================================================
+/* ==========================================================
    GLOW
-   ============================================================ */
+   ========================================================== */
 
 .robot-glow {
 
@@ -522,12 +840,13 @@ body {
     background:
         radial-gradient(
             circle,
-            rgba(0,225,255,0.28),
-            rgba(0,225,255,0.08) 50%,
+            rgba(0,225,255,.28),
+            rgba(0,225,255,.08) 50%,
             transparent 72%
         );
 
-    animation: glowPulse 2.5s ease-in-out infinite;
+    animation:
+        glowPulse 2.5s ease-in-out infinite;
 
     z-index: 1;
 }
@@ -538,9 +857,9 @@ body {
     0%,
     100% {
 
-        transform: scale(0.90);
+        transform: scale(.90);
 
-        opacity: 0.55;
+        opacity: .55;
     }
 
     50% {
@@ -552,9 +871,9 @@ body {
 }
 
 
-/* ============================================================
+/* ==========================================================
    ROBOT
-   ============================================================ */
+   ========================================================== */
 
 .robot {
 
@@ -566,7 +885,8 @@ body {
 
     z-index: 5;
 
-    animation: robotFloat 3s ease-in-out infinite;
+    animation:
+        robotFloat 3s ease-in-out infinite;
 }
 
 
@@ -575,19 +895,21 @@ body {
     0%,
     100% {
 
-        transform: translateY(0px);
+        transform:
+            translateY(0);
     }
 
     50% {
 
-        transform: translateY(-17px);
+        transform:
+            translateY(-17px);
     }
 }
 
 
-/* ============================================================
+/* ==========================================================
    ANTENNA
-   ============================================================ */
+   ========================================================== */
 
 .antenna {
 
@@ -630,7 +952,8 @@ body {
         0 0 10px #00ffae,
         0 0 30px #00ffae;
 
-    animation: antennaPulse 1.2s infinite;
+    animation:
+        antennaPulse 1.2s infinite;
 }
 
 
@@ -639,19 +962,21 @@ body {
     0%,
     100% {
 
-        transform: scale(0.75);
+        transform:
+            scale(.75);
     }
 
     50% {
 
-        transform: scale(1.2);
+        transform:
+            scale(1.2);
     }
 }
 
 
-/* ============================================================
+/* ==========================================================
    HEAD
-   ============================================================ */
+   ========================================================== */
 
 .robot-head {
 
@@ -677,15 +1002,20 @@ body {
     border: 5px solid #a5f4ff;
 
     box-shadow:
+
         0 0 18px #00eaff,
-        0 0 45px rgba(0,234,255,.7),
-        inset 0 0 25px rgba(255,255,255,.45);
+
+        0 0 45px
+        rgba(0,234,255,.7),
+
+        inset 0 0 25px
+        rgba(255,255,255,.45);
 }
 
 
-/* ============================================================
-   FACE SCREEN
-   ============================================================ */
+/* ==========================================================
+   FACE
+   ========================================================== */
 
 .face-screen {
 
@@ -706,14 +1036,17 @@ body {
     border: 3px solid #00eaff;
 
     box-shadow:
+
         inset 0 0 25px #00eaff,
-        0 0 15px rgba(0,234,255,.5);
+
+        0 0 15px
+        rgba(0,234,255,.5);
 }
 
 
-/* ============================================================
+/* ==========================================================
    EYES
-   ============================================================ */
+   ========================================================== */
 
 .eye {
 
@@ -730,10 +1063,13 @@ body {
     background: #00f6ff;
 
     box-shadow:
+
         0 0 12px #00f6ff,
+
         0 0 25px #00f6ff;
 
-    animation: blink 4s infinite;
+    animation:
+        blink 4s infinite;
 }
 
 
@@ -755,19 +1091,21 @@ body {
     90%,
     100% {
 
-        transform: scaleY(1);
+        transform:
+            scaleY(1);
     }
 
     94% {
 
-        transform: scaleY(0.08);
+        transform:
+            scaleY(.08);
     }
 }
 
 
-/* ============================================================
+/* ==========================================================
    MOUTH
-   ============================================================ */
+   ========================================================== */
 
 .mouth {
 
@@ -788,7 +1126,8 @@ body {
     box-shadow:
         0 0 14px #00f6ff;
 
-    animation: robotTalk 0.9s infinite;
+    animation:
+        robotTalk .9s infinite;
 }
 
 
@@ -811,9 +1150,9 @@ body {
 }
 
 
-/* ============================================================
+/* ==========================================================
    BODY
-   ============================================================ */
+   ========================================================== */
 
 .robot-body {
 
@@ -839,14 +1178,17 @@ body {
     border: 5px solid #a5f4ff;
 
     box-shadow:
+
         0 0 20px #00eaff,
-        inset 0 0 20px rgba(255,255,255,.3);
+
+        inset 0 0 20px
+        rgba(255,255,255,.3);
 }
 
 
-/* ============================================================
+/* ==========================================================
    CHEST
-   ============================================================ */
+   ========================================================== */
 
 .chest {
 
@@ -888,10 +1230,13 @@ body {
     background: #00ffae;
 
     box-shadow:
+
         0 0 12px #00ffae,
+
         0 0 28px #00ffae;
 
-    animation: corePulse 1.2s infinite;
+    animation:
+        corePulse 1.2s infinite;
 }
 
 
@@ -900,19 +1245,21 @@ body {
     0%,
     100% {
 
-        transform: scale(0.75);
+        transform:
+            scale(.75);
     }
 
     50% {
 
-        transform: scale(1.2);
+        transform:
+            scale(1.2);
     }
 }
 
 
-/* ============================================================
+/* ==========================================================
    ARMS
-   ============================================================ */
+   ========================================================== */
 
 .arm {
 
@@ -943,7 +1290,8 @@ body {
 
     left: 16px;
 
-    transform: rotate(12deg);
+    transform:
+        rotate(12deg);
 }
 
 
@@ -951,21 +1299,20 @@ body {
 
     right: 16px;
 
-    transform: rotate(-12deg);
+    transform:
+        rotate(-12deg);
 }
 
 
-/* ============================================================
+/* ==========================================================
    STATUS
-   ============================================================ */
+   ========================================================== */
 
 .robot-status {
 
     text-align: center;
 
     margin-top: -5px;
-
-    font-family: Arial, sans-serif;
 }
 
 
@@ -979,14 +1326,96 @@ body {
 
     color: #00eaff;
 
-    border: 1px solid #00eaff;
+    border:
+        1px solid #00eaff;
 
-    background: rgba(0,234,255,.08);
+    background:
+        rgba(0,234,255,.08);
 
     box-shadow:
-        0 0 20px rgba(0,234,255,.25);
+        0 0 20px
+        rgba(0,234,255,.25);
 
     font-size: 14px;
+
+    letter-spacing: 1px;
+}
+
+
+/* ==========================================================
+   FOOTER
+   ========================================================== */
+
+.baithak-footer {
+
+    margin-top: 35px;
+
+    padding: 28px 15px;
+
+    text-align: center;
+
+    border-top:
+        1px solid
+        rgba(0,234,255,.25);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(0,234,255,.02),
+            rgba(0,234,255,.08)
+        );
+}
+
+
+.footer-title {
+
+    font-size: 17px;
+
+    font-weight: 700;
+
+    letter-spacing: 2px;
+
+    color: #00eaff;
+
+    text-shadow:
+        0 0 10px
+        rgba(0,234,255,.6);
+}
+
+
+.footer-name {
+
+    margin-top: 10px;
+
+    font-size: 18px;
+
+    font-weight: 800;
+
+    line-height: 1.6;
+
+    color: white;
+}
+
+
+.footer-line {
+
+    margin-top: 12px;
+
+    font-size: 12px;
+
+    color: #7fa0b3;
+
+    letter-spacing: 1px;
+}
+
+
+.footer-tech {
+
+    margin-top: 15px;
+
+    color: #00ffae;
+
+    font-size: 12px;
 
     letter-spacing: 1px;
 }
@@ -998,15 +1427,22 @@ body {
 
 <body>
 
+
+<!-- ========================================================
+     ROBOT
+     ======================================================== -->
+
 <div class="robot-container">
 
     <div class="robot-glow"></div>
+
 
     <div class="robot">
 
         <div class="antenna"></div>
 
         <div class="antenna-light"></div>
+
 
         <div class="robot-head">
 
@@ -1046,8 +1482,55 @@ body {
 <div class="robot-status">
 
     <span class="status-pill">
+
         🟢 BAITHAK IS READY
+
     </span>
+
+</div>
+
+
+<!-- ========================================================
+     FOOTER
+     ======================================================== -->
+
+<div class="baithak-footer">
+
+    <div class="footer-title">
+
+        🤖 BAITHAK WITH AI
+
+    </div>
+
+
+    <div class="footer-name">
+
+        Designed by Certified Generative and Agentic AI
+        Application Developer
+
+        <br>
+
+        Engr. Bilal Mehmood
+
+    </div>
+
+
+    <div class="footer-line">
+
+        Intelligent Talking AI • Voice Interaction •
+        OpenAI Powered • Streamlit Application
+
+    </div>
+
+
+    <div class="footer-tech">
+
+        🧠 AI &nbsp; • &nbsp;
+        🎙️ SPEECH &nbsp; • &nbsp;
+        🔊 VOICE &nbsp; • &nbsp;
+        🤖 ROBOTICS
+
+    </div>
 
 </div>
 
@@ -1057,9 +1540,10 @@ body {
 </html>
 """
 
+
     components.html(
         robot_html,
-        height=570,
+        height=760,
         scrolling=False
     )
 
@@ -1078,7 +1562,7 @@ st.markdown(
         YOUR INTELLIGENT TALKING AI COMPANION
     </div>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
@@ -1088,42 +1572,117 @@ st.markdown(
 
 with st.sidebar:
 
-    st.markdown("## ⚙️ BAITHAK SETTINGS")
+    st.markdown(
+        "## ⚙️ BAITHAK SETTINGS"
+    )
 
-    if client:
 
-        st.success(
-            "🟢 OPENAI CONNECTED"
+    # --------------------------------------------------------
+    # MODE SELECTOR
+    # --------------------------------------------------------
+
+    mode = st.radio(
+        "Select Operating Mode",
+        [
+            "Demo Mode",
+            "API Mode"
+        ],
+        index=(
+            0
+            if st.session_state.mode == "Demo Mode"
+            else 1
+        )
+    )
+
+
+    st.session_state.mode = mode
+
+
+    # --------------------------------------------------------
+    # MODE STATUS
+    # --------------------------------------------------------
+
+    st.markdown("---")
+
+    if mode == "Demo Mode":
+
+        st.info(
+            "🟡 DEMO MODE\n\n"
+            "No API key required."
         )
 
     else:
 
-        st.error(
-            "🔴 OPENAI NOT CONNECTED"
-        )
+        if client:
+
+            st.success(
+                "🟢 OPENAI API MODE"
+            )
+
+        else:
+
+            st.warning(
+                "🟠 API MODE SELECTED\n\n"
+                "OPENAI_API_KEY is not configured."
+            )
+
+
+    # --------------------------------------------------------
+    # MODEL
+    # --------------------------------------------------------
 
     st.markdown("---")
 
-    st.markdown("### 🧠 AI MODEL")
-
-    st.code(
-        OPENAI_MODEL
+    st.markdown(
+        "### 🧠 AI MODEL"
     )
 
-    st.markdown("### 🎙️ VOICE")
+    if mode == "API Mode":
+
+        st.code(
+            OPENAI_MODEL
+        )
+
+    else:
+
+        st.code(
+            "BAITHAK DEMO ENGINE"
+        )
+
+
+    # --------------------------------------------------------
+    # VOICE
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 🎙️ VOICE"
+    )
 
     voice_enabled = st.toggle(
         "Enable AI Voice",
         value=True
     )
 
+
+    # --------------------------------------------------------
+    # API INFO
+    # --------------------------------------------------------
+
     st.markdown("---")
 
-    st.markdown("### 🔐 API SECURITY")
+    st.markdown(
+        "### 🔐 API SECURITY"
+    )
 
     st.info(
-        "API key is loaded securely from Streamlit Secrets."
+        "OPENAI_API_KEY is loaded from "
+        "Streamlit Secrets or environment variables."
     )
+
+
+    # --------------------------------------------------------
+    # CLEAR
+    # --------------------------------------------------------
 
     st.markdown("---")
 
@@ -1134,8 +1693,6 @@ with st.sidebar:
 
         st.session_state.conversation = []
 
-        st.session_state.last_answer = ""
-
         st.session_state.last_audio = None
 
         st.session_state.api_error = ""
@@ -1144,7 +1701,7 @@ with st.sidebar:
 
 
 # ============================================================
-# MAIN AREA
+# MAIN COLUMNS
 # ============================================================
 
 robot_column, chat_column = st.columns(
@@ -1173,25 +1730,52 @@ with chat_column:
         unsafe_allow_html=True
     )
 
+
     st.markdown(
         "## 💬 BAITHAK CONVERSATION"
     )
+
+
+    # --------------------------------------------------------
+    # CURRENT MODE
+    # --------------------------------------------------------
+
+    if st.session_state.mode == "Demo Mode":
+
+        st.warning(
+            "🟡 BAITHAK is running in DEMO MODE"
+        )
+
+    else:
+
+        st.success(
+            "🟢 BAITHAK is running with "
+            f"{OPENAI_MODEL}"
+        )
+
+
+    # --------------------------------------------------------
+    # CHAT HISTORY
+    # --------------------------------------------------------
 
     if not st.session_state.conversation:
 
         st.info(
             "👋 Assalam-o-Alaikum!\n\n"
             "I am BAITHAK WITH AI.\n\n"
-            "Type a message or use the microphone."
+            "You can type a message or use the microphone."
         )
 
     else:
 
-        for message in st.session_state.conversation:
+        for message in (
+            st.session_state.conversation
+        ):
 
             role = message["role"]
 
             content = message["content"]
+
 
             if role == "user":
 
@@ -1200,7 +1784,10 @@ with chat_column:
                     avatar="👤"
                 ):
 
-                    st.write(content)
+                    st.write(
+                        content
+                    )
+
 
             elif role == "assistant":
 
@@ -1209,7 +1796,10 @@ with chat_column:
                     avatar="🤖"
                 ):
 
-                    st.write(content)
+                    st.write(
+                        content
+                    )
+
 
     st.markdown(
         "</div>",
@@ -1218,7 +1808,7 @@ with chat_column:
 
 
 # ============================================================
-# TEXT INPUT
+# TEXT CHAT
 # ============================================================
 
 text_message = st.chat_input(
@@ -1240,18 +1830,20 @@ if text_message:
 
 
 # ============================================================
-# VOICE INPUT
+# VOICE SECTION
 # ============================================================
 
 st.markdown("---")
+
 
 st.markdown(
     "## 🎙️ TALK TO BAITHAK"
 )
 
+
 st.caption(
-    "Press the microphone button, speak naturally, "
-    "then process your recording."
+    "Record your voice, process it with OpenAI, "
+    "and receive an AI response."
 )
 
 
@@ -1267,104 +1859,133 @@ if audio_input is not None:
         format="audio/wav"
     )
 
+
     if st.button(
         "🧠 PROCESS VOICE",
         type="primary",
         use_container_width=True
     ):
 
-        # ====================================================
-        # SPEECH TO TEXT
-        # ====================================================
 
-        with st.spinner(
-            "🎙️ BAITHAK is listening..."
-        ):
+        # ----------------------------------------------------
+        # DEMO MODE VOICE
+        # ----------------------------------------------------
 
-            spoken_text, error = transcribe_audio(
-                audio_input
+        if st.session_state.mode == "Demo Mode":
+
+            st.info(
+                "🎙️ Voice transcription requires "
+                "API Mode with OpenAI."
             )
 
-        if error:
-
-            st.error(
-                "❌ Speech recognition failed: "
-                + error
-            )
 
         else:
 
-            st.success(
-                "🎙️ You said:"
-            )
-
-            st.write(
-                spoken_text
-            )
-
-
-            # =================================================
-            # AI RESPONSE
-            # =================================================
+            # ------------------------------------------------
+            # TRANSCRIPTION
+            # ------------------------------------------------
 
             with st.spinner(
-                "🧠 BAITHAK is thinking..."
+                "🎙️ BAITHAK is listening..."
             ):
 
-                answer = ask_ai(
+                spoken_text, error = (
+                    transcribe_audio(
+                        audio_input
+                    )
+                )
+
+
+            if error:
+
+                st.error(
+                    "❌ Speech recognition failed:\n\n"
+                    + error
+                )
+
+
+            else:
+
+                st.success(
+                    "🎙️ You said:"
+                )
+
+
+                st.write(
                     spoken_text
                 )
 
-            st.markdown(
-                "### 🤖 BAITHAK"
-            )
 
-            st.write(
-                answer
-            )
-
-
-            # =================================================
-            # TEXT TO SPEECH
-            # =================================================
-
-            if voice_enabled:
+                # --------------------------------------------
+                # AI
+                # --------------------------------------------
 
                 with st.spinner(
-                    "🔊 BAITHAK is speaking..."
+                    "🧠 BAITHAK is thinking..."
                 ):
 
-                    audio_bytes, error = create_voice(
-                        answer
+                    answer = ask_ai(
+                        spoken_text
                     )
 
-                if error:
 
-                    st.warning(
-                        "🔊 Voice generation failed: "
-                        + error
-                    )
+                st.markdown(
+                    "### 🤖 BAITHAK"
+                )
 
-                elif audio_bytes:
 
-                    st.session_state.last_audio = (
-                        audio_bytes
-                    )
+                st.write(
+                    answer
+                )
 
-                    st.markdown(
-                        "### 🔊 BAITHAK VOICE"
-                    )
 
-                    st.markdown(
-                        make_audio_player(
+                # --------------------------------------------
+                # VOICE
+                # --------------------------------------------
+
+                if voice_enabled:
+
+                    with st.spinner(
+                        "🔊 BAITHAK is speaking..."
+                    ):
+
+                        audio_bytes, error = (
+                            create_voice(
+                                answer
+                            )
+                        )
+
+
+                    if error:
+
+                        st.warning(
+                            "🔊 Voice generation failed:\n\n"
+                            + error
+                        )
+
+
+                    elif audio_bytes:
+
+                        st.session_state.last_audio = (
                             audio_bytes
-                        ),
-                        unsafe_allow_html=True
-                    )
+                        )
+
+
+                        st.markdown(
+                            "### 🔊 BAITHAK VOICE"
+                        )
+
+
+                        st.markdown(
+                            make_audio_player(
+                                audio_bytes
+                            ),
+                            unsafe_allow_html=True
+                        )
 
 
 # ============================================================
-# LAST RESPONSE
+# LAST AUDIO
 # ============================================================
 
 if (
@@ -1384,49 +2005,4 @@ if (
         ),
         unsafe_allow_html=True
     )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="baithak-footer">
-
-        <div class="footer-title">
-            🤖 BAITHAK WITH AI
-        </div>
-
-        <div class="footer-name">
-
-            Designed by Certified Generative and Agentic AI
-            Application Developer
-
-            <br>
-
-            <strong>Engr. Bilal Mehmood</strong>
-
-        </div>
-
-        <div class="footer-line">
-
-            Intelligent Talking AI • Voice Interaction •
-            OpenAI Powered • Streamlit Application
-
-        </div>
-
-        <div class="footer-tech">
-
-            🧠 AI &nbsp; • &nbsp;
-            🎙️ SPEECH &nbsp; • &nbsp;
-            🔊 VOICE &nbsp; • &nbsp;
-            🤖 ROBOTICS
-
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
