@@ -1,2 +1,14 @@
-streamlit==1.50.0
-openai==1.109.1
+# Web Framework & Core UI
+streamlit>=1.35.0
+
+# LLM API & Client
+openai>=1.30.0
+
+# File Reading & Document Parsing
+pypdf>=4.2.0
+python-docx>=1.1.0
+
+# Document & Spreadsheet Export Generation
+fpdf2>=2.7.9
+pandas>=2.2.0
+openpyxl>=3.1.2
