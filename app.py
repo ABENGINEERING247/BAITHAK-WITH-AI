@@ -2,6 +2,7 @@ import os
 import uuid
 import logging
 import html
+import io
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -10,6 +11,16 @@ try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
+try:
+    from docx import Document
+except ImportError:
+    Document = None
 
 # ============================================================
 # PAGE CONFIG
@@ -71,7 +82,7 @@ client = get_client(API_KEY)
 if "conversations" not in st.session_state:
     first_id = str(uuid.uuid4())
     st.session_state.conversations = {
-        first_id: {"title": "New chat", "messages": []}
+        first_id: {"title": "New chat", "messages": [], "documents": []}
     }
     st.session_state.active_conversation = first_id
 
@@ -92,7 +103,7 @@ if "welcome_dismissed" not in st.session_state:
 def new_chat():
     chat_id = str(uuid.uuid4())
     st.session_state.conversations[chat_id] = {
-        "title": "New chat", "messages": []
+        "title": "New chat", "messages": [], "documents": []
     }
     st.session_state.active_conversation = chat_id
     st.session_state.notice = ""
@@ -101,7 +112,7 @@ def new_chat():
 def clear_current_chat():
     chat_id = st.session_state.active_conversation
     st.session_state.conversations[chat_id] = {
-        "title": "New chat", "messages": []
+        "title": "New chat", "messages": [], "documents": []
     }
     st.session_state.notice = ""
 
@@ -109,7 +120,7 @@ def clear_current_chat():
 def delete_all_chats():
     chat_id = str(uuid.uuid4())
     st.session_state.conversations = {
-        chat_id: {"title": "New chat", "messages": []}
+        chat_id: {"title": "New chat", "messages": [], "documents": []}
     }
     st.session_state.active_conversation = chat_id
     st.session_state.notice = ""
@@ -175,6 +186,79 @@ def generate_reply(messages):
         )
 
 
+def extract_uploaded_text(uploaded_file):
+    """Extract text from PDF, DOCX, or TXT uploads without saving them to disk."""
+    filename = uploaded_file.name
+    suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    raw = uploaded_file.getvalue()
+    try:
+        if suffix == "txt":
+            for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+                try:
+                    return raw.decode(encoding).strip()
+                except UnicodeDecodeError:
+                    continue
+            return raw.decode("utf-8", errors="replace").strip()
+        if suffix == "pdf":
+            if PdfReader is None:
+                raise RuntimeError("PDF support is not installed. Add pypdf to requirements.txt.")
+            reader = PdfReader(io.BytesIO(raw))
+            pages = []
+            for page_no, page in enumerate(reader.pages, start=1):
+                text = (page.extract_text() or "").strip()
+                if text:
+                    pages.append(f"[Page {page_no}]\n{text}")
+            return "\n\n".join(pages)
+        if suffix == "docx":
+            if Document is None:
+                raise RuntimeError("Word support is not installed. Add python-docx to requirements.txt.")
+            doc = Document(io.BytesIO(raw))
+            parts = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
+            for table_no, table in enumerate(doc.tables, start=1):
+                parts.append(f"[Table {table_no}]")
+                for row in table.rows:
+                    parts.append(" | ".join(cell.text.replace("\n", " ").strip() for cell in row.cells))
+            return "\n".join(parts).strip()
+        raise ValueError("Unsupported file type. Please upload PDF, DOCX, or TXT.")
+    except Exception as exc:
+        raise RuntimeError(f"Could not read {filename}: {exc}") from exc
+
+
+def add_uploaded_documents(uploaded_files, conversation):
+    """Read uploads and attach extracted text to the active conversation."""
+    if not uploaded_files:
+        return
+    existing = {doc.get("name") for doc in conversation.setdefault("documents", [])}
+    added = 0
+    for uploaded_file in uploaded_files:
+        if uploaded_file.name in existing:
+            continue
+        try:
+            extracted = extract_uploaded_text(uploaded_file)
+            if not extracted:
+                st.warning(f"{uploaded_file.name}: no selectable text was found. Scanned PDFs may need OCR first.")
+                continue
+            # Limit per-file text to keep requests manageable.
+            max_chars = 80000
+            was_truncated = len(extracted) > max_chars
+            extracted = extracted[:max_chars]
+            conversation["documents"].append({
+                "name": uploaded_file.name,
+                "text": extracted,
+                "truncated": was_truncated,
+            })
+            added += 1
+        except Exception as exc:
+            st.error(str(exc))
+    if added:
+        names = [d["name"] for d in conversation["documents"]]
+        conversation["messages"].append({
+            "role": "assistant",
+            "content": "📎 **Documents ready for this conversation:**\n\n" + "\n".join(f"- {name}" for name in names) + "\n\nAsk me a question about the uploaded files."
+        })
+        st.session_state.notice = f"Added {added} document(s) to this conversation."
+
+
 def submit_prompt(prompt):
     prompt = prompt.strip()
     if not prompt:
@@ -187,6 +271,22 @@ def submit_prompt(prompt):
         for m in conversation["messages"]
         if m["role"] in ("user", "assistant")
     ]
+    # Include extracted documents as context for the live model. The text stays in
+    # this Streamlit session and is only sent when the user submits a chat prompt.
+    documents = conversation.get("documents", [])
+    if documents and api_messages and api_messages[-1]["role"] == "user":
+        chunks = []
+        remaining = 120000
+        for doc in documents:
+            if remaining <= 0:
+                break
+            piece = doc["text"][:remaining]
+            chunks.append(f"\n\n--- Uploaded document: {doc['name']} ---\n{piece}")
+            remaining -= len(piece)
+        api_messages[-1]["content"] += (
+            "\n\nUse the following uploaded document text as source material when relevant. "
+            "If the answer is not supported by the files, say so.\n" + "".join(chunks)
+        )
     answer = generate_reply(api_messages)
     conversation["messages"].append({"role": "assistant", "content": answer})
 
@@ -410,6 +510,40 @@ else:
         avatar = "🧑" if message["role"] == "user" else "✳"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
+
+# ============================================================
+# DOCUMENT UPLOADS
+# ============================================================
+conversation.setdefault("documents", [])
+with st.expander("📎 Attach documents to this conversation", expanded=bool(conversation.get("documents"))):
+    st.caption("Supported formats: PDF, DOCX, TXT · Multiple files are supported · Max 20 MB per file")
+    uploaded_files = st.file_uploader(
+        "Upload files",
+        type=["pdf", "docx", "txt"],
+        accept_multiple_files=True,
+        key=f"document_upload_{st.session_state.active_conversation}",
+        help="Upload documents, then ask Baithak a question in the chat below.",
+    )
+    if st.button("Add files to conversation", key=f"add_documents_{st.session_state.active_conversation}", use_container_width=True):
+        if uploaded_files:
+            too_large = [f.name for f in uploaded_files if f.size > 20 * 1024 * 1024]
+            if too_large:
+                st.error("These files exceed the 20 MB limit: " + ", ".join(too_large))
+            else:
+                add_uploaded_documents(uploaded_files, conversation)
+                st.rerun()
+        else:
+            st.info("Choose one or more PDF, DOCX, or TXT files first.")
+    if conversation.get("documents"):
+        st.markdown("**Files attached to this chat**")
+        for idx, doc in enumerate(conversation["documents"]):
+            col_name, col_remove = st.columns([5, 1])
+            with col_name:
+                st.write(f"📄 {doc['name']}" + (" · text truncated for context limits" if doc.get("truncated") else ""))
+            with col_remove:
+                if st.button("Remove", key=f"remove_doc_{st.session_state.active_conversation}_{idx}"):
+                    conversation["documents"].pop(idx)
+                    st.rerun()
 
 prompt = st.chat_input("Message Baithak...")
 if prompt and prompt.strip():
