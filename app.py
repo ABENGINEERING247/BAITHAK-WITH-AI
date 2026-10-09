@@ -1966,7 +1966,7 @@ st.markdown(
     """
     <div class="footer">
 
-        🤖 <b>BAITHAK WITH AI</b><br>
+         <b> 🤖 BAITHAK WITH AI</b> <br>
 
         Intelligent Voice & Text AI Assistant<br>
 
