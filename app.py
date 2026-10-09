@@ -1371,25 +1371,14 @@ def generate_ai_response(question):
 
     try:
 
+        # The caller saves the current user message before invoking this
+        # function, so reuse saved history instead of duplicating the prompt.
         recent_messages = st.session_state.messages[-12:]
-
-        conversation = []
-
-        for item in recent_messages:
-
-            conversation.append(
-                {
-                    "role": item["role"],
-                    "content": item["content"]
-                }
-            )
-
-        conversation.append(
-            {
-                "role": "user",
-                "content": question
-            }
-        )
+        conversation = [
+            {"role": item["role"], "content": item["content"]}
+            for item in recent_messages
+            if item.get("role") in ("user", "assistant")
+        ]
 
         response = client.responses.create(
             model=OPENAI_MODEL,
@@ -1419,10 +1408,12 @@ def generate_ai_response(question):
 
         st.session_state.last_error = str(e)
 
+        # Keep chat usable if the API key, credits, model, or network fails.
         return (
-            "⚠️ I encountered an AI service error.\n\n"
-            "Please check your OpenAI API key, model configuration, "
-            "API credits, and internet connection."
+            "⚠️ OpenAI is unavailable, so I have switched to Demo Mode.\n\n"
+            + demo_response(question)
+            + "\n\nFor full AI responses, check OPENAI_API_KEY, the model name, "
+            "API billing/credits, and your internet connection."
         )
 
 
