@@ -2,17 +2,12 @@
 import os
 import uuid
 import logging
-
+from openai import OpenAI
 import streamlit as st
-
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# BAITHAK WITH AI - CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -25,13 +20,13 @@ st.set_page_config(
 DEFAULT_MODEL = "gpt-4o-mini"
 
 SYSTEM_PROMPT = """
-You are Baithak, a helpful, friendly, and intelligent AI assistant.
+You are Baithak, a helpful, intelligent, friendly AI assistant.
 Answer the user's actual question directly.
-Use Markdown formatting when helpful.
-Explain complex ideas step by step.
-Be honest when you are uncertain.
-Match the user's language where practical.
-Write clean, well-formatted code when requested.
+Use clear Markdown formatting where appropriate.
+Explain difficult topics step by step.
+Write complete, working code when requested.
+Match the user's language whenever practical.
+Be honest about uncertainty.
 """
 
 
@@ -40,19 +35,20 @@ Write clean, well-formatted code when requested.
 # ============================================================
 
 logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger("baithak_ai")
+logger = logging.getLogger("baithak")
 
 
 # ============================================================
-# CONFIGURATION AND SECRETS
+# READ API CONFIGURATION
 # ============================================================
 
 def get_secret(name, default=None):
-    """Read configuration from Streamlit Secrets or environment."""
     try:
         value = st.secrets.get(name)
+
         if value is not None and str(value).strip():
             return str(value).strip()
+
     except Exception:
         pass
 
@@ -74,8 +70,7 @@ MODEL = get_secret("OPENAI_MODEL", DEFAULT_MODEL)
 
 @st.cache_resource(show_spinner=False)
 def get_client(api_key):
-    """Create an OpenAI client or return None."""
-    if not api_key or OpenAI is None:
+    if not api_key:
         return None
 
     try:
@@ -89,7 +84,11 @@ def get_client(api_key):
         return None
 
 
-client = get_client(API_KEY)
+# Support missing OpenAI package without crashing the app.
+try:
+    client = get_client(API_KEY)
+except Exception:
+    client = None
 
 
 # ============================================================
@@ -97,16 +96,16 @@ client = get_client(API_KEY)
 # ============================================================
 
 if "conversations" not in st.session_state:
-    first_id = str(uuid.uuid4())
+    chat_id = str(uuid.uuid4())
 
     st.session_state.conversations = {
-        first_id: {
+        chat_id: {
             "title": "New chat",
             "messages": [],
         }
     }
 
-    st.session_state.active_conversation = first_id
+    st.session_state.active_conversation = chat_id
 
 if "active_conversation" not in st.session_state:
     st.session_state.active_conversation = next(
@@ -129,7 +128,7 @@ if "mode" not in st.session_state:
 
 
 # ============================================================
-# CHAT MANAGEMENT
+# CHAT FUNCTIONS
 # ============================================================
 
 def new_chat():
@@ -142,6 +141,9 @@ def new_chat():
 
     st.session_state.active_conversation = chat_id
     st.session_state.notice = ""
+    st.session_state.mode = (
+        "OpenAI" if client is not None else "Demo Mode"
+    )
 
 
 def clear_current_chat():
@@ -180,26 +182,25 @@ def update_chat_title(conversation, prompt):
 
 
 # ============================================================
-# DEMO MODE FALLBACK
+# DEMO MODE
 # ============================================================
 
 def demo_reply(prompt):
-    """Provide a local fallback without making an API request."""
     text = prompt.strip()
     lower = text.lower()
 
     if any(
         word in lower
-        for word in [
+        for word in (
             "hello",
             "hi",
             "hey",
             "salam",
             "assalam",
-        ]
+        )
     ):
         return (
-            "Hello! 👋 Welcome to **Baithak with AI**.\n\n"
+            "Hello! Welcome to **Baithak with AI**. 👋\n\n"
             "How can I help you today?\n\n"
             "_Demo Mode is active. This is a sample response, "
             "not a live AI-generated answer._"
@@ -207,47 +208,44 @@ def demo_reply(prompt):
 
     if any(
         word in lower
-        for word in [
+        for word in (
             "python",
             "code",
             "program",
-            "programming",
             "debug",
-        ]
+            "programming",
+        )
     ):
         return (
             "I'd be happy to help with your programming task! 💻\n\n"
-            "To get started:\n\n"
-            "1. Describe what you want your program to do.\n"
-            "2. Share your code, if available.\n"
-            "3. Include the complete error message, if you have one.\n\n"
-            "**Demo Mode is active**, so detailed live AI responses "
-            "are unavailable. Configure `OPENAI_API_KEY` to enable "
+            "Please share:\n\n"
+            "1. What you want your program to do.\n"
+            "2. Your current code, if available.\n"
+            "3. The complete error message, if any.\n\n"
+            "**Demo Mode is active**, so this is not a full live "
+            "AI response. Configure your OpenAI API key to enable "
             "the live assistant."
         )
 
     return (
         f"I received your message:\n\n> {text}\n\n"
-        "**Demo Mode is active.** This local fallback does not "
-        "provide a full AI-generated answer.\n\n"
-        "To enable live responses, add `OPENAI_API_KEY` to "
-        "Streamlit Secrets. The default model is `gpt-4o-mini`."
+        "**Demo Mode is active.** This fallback provides a basic "
+        "sample response rather than a full AI-generated answer.\n\n"
+        "Configure `OPENAI_API_KEY` in Streamlit Secrets to enable "
+        "live AI responses."
     )
 
 
 # ============================================================
-# AI RESPONSE GENERATION
+# GENERATE AI RESPONSE
 # ============================================================
 
 def generate_reply(messages):
-    """
-    Generate an answer with OpenAI.
-    If configuration or the API request fails, use Demo Mode.
-    """
     if client is None:
         st.session_state.mode = "Demo Mode"
         st.session_state.notice = (
-            "Demo Mode · Configure OPENAI_API_KEY for live responses."
+            "Demo Mode is active. Configure OPENAI_API_KEY "
+            "to enable live responses."
         )
 
         return demo_reply(messages[-1]["content"])
@@ -270,31 +268,29 @@ def generate_reply(messages):
             raise ValueError("The AI returned an empty response.")
 
         st.session_state.mode = "OpenAI"
-        st.session_state.notice = f"Connected · {MODEL}"
+        st.session_state.notice = f"Connected to {MODEL}"
 
         return answer.strip()
 
     except Exception:
-        # Keep sensitive configuration and exception details
-        # out of the user-facing chat.
+        # Keep API keys and raw exception details out of the chat.
         logger.exception("OpenAI request failed.")
 
         st.session_state.mode = "Demo Mode"
         st.session_state.notice = (
-            "Demo Mode · The OpenAI request failed. "
+            "Demo Mode is active because the OpenAI request failed. "
             "Check your API key, model access, quota, and connection."
         )
 
         return (
             "I couldn't obtain a response from the live AI service, "
             "so I've switched to **Demo Mode**.\n\n"
-            "Please check your OpenAI API key, model access, API "
-            "billing or quota, and network connection. Then try again."
+            "Please check your API key, model access, API billing "
+            "or quota, and internet connection, then try again."
         )
 
 
 def submit_prompt(prompt):
-    """Save a user message and generate an assistant response."""
     prompt = prompt.strip()
 
     if not prompt:
@@ -332,7 +328,7 @@ def submit_prompt(prompt):
 
 
 # ============================================================
-# CHATGPT-STYLE DESIGN
+# CHATGPT-STYLE CSS
 # ============================================================
 
 st.markdown(
@@ -353,7 +349,7 @@ st.markdown(
     }
 
     header[data-testid="stHeader"] {
-        background: rgba(255,255,255,.95);
+        background: rgba(255, 255, 255, 0.95);
     }
 
     [data-testid="stSidebar"] {
@@ -460,7 +456,7 @@ st.markdown(
     [data-testid="stChatInput"] {
         border-radius: 24px !important;
         border: 1px solid #d9d9d9 !important;
-        box-shadow: 0 5px 24px rgba(0,0,0,.06);
+        box-shadow: 0 5px 24px rgba(0, 0, 0, .06);
         background: white !important;
     }
 
@@ -534,7 +530,8 @@ with st.sidebar:
 
     for chat_id, chat in chat_items:
         prefix = (
-            "▸ " if chat_id == st.session_state.active_conversation
+            "▸ "
+            if chat_id == st.session_state.active_conversation
             else "   "
         )
 
@@ -569,10 +566,10 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.caption(f"Model: `{MODEL}`")
+    st.caption(f"Model: {MODEL}")
 
-    # These messages use standard Streamlit calls without
-    # potentially invalid icon arguments.
+    # IMPORTANT:
+    # No custom icon argument is used in any Streamlit alert.
     if st.session_state.mode == "OpenAI":
         st.success("OpenAI response received")
     elif client is not None:
@@ -603,7 +600,7 @@ with st.sidebar:
 
 
 # ============================================================
-# MAIN CHAT
+# MAIN CHAT AREA
 # ============================================================
 
 conversation = st.session_state.conversations[
@@ -615,9 +612,8 @@ st.markdown(
     <div class="topbar">
         <div class="brand">
             <span class="brand-mark">✳</span>
-            Baithak <span style="font-weight:400;color:#777;">
-                with AI
-            </span>
+            Baithak
+            <span style="font-weight:400;color:#777;">with AI</span>
         </div>
         <div class="status">Text assistant</div>
     </div>
@@ -630,7 +626,7 @@ if st.session_state.notice:
 
 
 # ============================================================
-# WELCOME SCREEN AND SUGGESTIONS
+# WELCOME SCREEN
 # ============================================================
 
 if not conversation["messages"]:
@@ -684,26 +680,13 @@ else:
 
 
 # ============================================================
-# CHAT INPUT
+# TEXT CHAT INPUT
 # ============================================================
 
 prompt = st.chat_input("Message Baithak...")
 
 if prompt and prompt.strip():
-    with st.chat_message("user", avatar="🧑"):
-        st.markdown(prompt.strip())
-
-    with st.chat_message("assistant", avatar="✳"):
-        with st.spinner("Thinking..."):
-            submit_prompt(prompt)
-
-        # Read the newly saved assistant message.
-        latest_answer = st.session_state.conversations[
-            st.session_state.active_conversation
-        ]["messages"][-1]["content"]
-
-        st.markdown(latest_answer)
-
+    submit_prompt(prompt)
     st.rerun()
 
 
