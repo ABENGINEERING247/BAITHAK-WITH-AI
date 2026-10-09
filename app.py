@@ -3,10 +3,14 @@ import uuid
 import logging
 import html
 import io
+import re
 
 import streamlit as st
 import streamlit.components.v1 as components
 
+# ============================================================
+# OPTIONAL DEPENDENCIES WITH FALLBACK HANDLING
+# ============================================================
 try:
     from openai import OpenAI
 except ImportError:
@@ -22,6 +26,16 @@ try:
 except ImportError:
     Document = None
 
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+try:
+    from fpdf import FPDF
+except ImportError:
+    FPDF = None
+
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -33,19 +47,30 @@ st.set_page_config(
 )
 
 DEFAULT_MODEL = "gpt-6-luna"
-SYSTEM_PROMPT = """
+
+SYSTEM_PROMPTS = {
+    "General Assistant": """
 You are Baithak, a helpful, friendly, clear AI assistant.
 Answer the user's actual question directly. Use Markdown when useful.
 Explain complex topics step by step, write complete code when requested,
 and match the user's language where practical. Be honest when uncertain.
+""",
+    "Clerk AI (Documentation & Emails)": """
+You are Baithak Clerk AI, a highly meticulous, professional administrative assistant and documentation specialist.
+Your core responsibilities:
+1. Draft clear, formal, executive-ready emails, memos, official notices, meeting minutes, and corporate reports.
+2. Structure information logically using headers, bullet points, and clean Markdown tables for quantitative or structured data.
+3. Ensure formatting is publication-ready, adaptable for immediate export to PDF, Word, or Excel tables.
+4. Maintain a polite, articulate, professional tone across all written communications.
 """
+}
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger("baithak_ai")
 
 
 # ============================================================
-# SECRETS
+# SECRETS & CLIENT INIT
 # ============================================================
 def get_secret(name, default=None):
     try:
@@ -77,7 +102,7 @@ client = get_client(API_KEY)
 
 
 # ============================================================
-# SESSION STATE
+# SESSION STATE INITIALIZATION
 # ============================================================
 if "conversations" not in st.session_state:
     first_id = str(uuid.uuid4())
@@ -96,8 +121,8 @@ if "notice" not in st.session_state:
     st.session_state.notice = ""
 if "mode" not in st.session_state:
     st.session_state.mode = "Demo Mode"
-if "welcome_dismissed" not in st.session_state:
-    st.session_state.welcome_dismissed = False
+if "ai_role" not in st.session_state:
+    st.session_state.ai_role = "General Assistant"
 
 
 def new_chat():
@@ -132,25 +157,149 @@ def update_title(conversation, prompt):
         conversation["title"] = title[:35].rstrip() + ("..." if len(title) > 35 else "")
 
 
+# ============================================================
+# EXPORT HELPERS (PDF, DOCX, TXT, EXCEL)
+# ============================================================
+def generate_txt(text: str) -> bytes:
+    """Return plain UTF-8 text bytes."""
+    return text.encode("utf-8")
+
+
+def generate_pdf(text: str) -> bytes:
+    """Generate a clean PDF from standard text."""
+    if FPDF is None:
+        raise RuntimeError("PDF generator library `fpdf2` is not installed. Add `fpdf2` to requirements.txt.")
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Helvetica", size=11)
+    
+    # Strip markdown bold/italic decorators for clean PDF output
+    clean_text = re.sub(r'[*_`#]', '', text)
+    
+    for line in clean_text.split("\n"):
+        pdf.multi_cell(0, 7, txt=line)
+    
+    buffer = io.BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
+
+
+def generate_docx(text: str) -> bytes:
+    """Generate a structured DOCX document from markdown text."""
+    if Document is None:
+        raise RuntimeError("Word generator library `python-docx` is not installed. Add `python-docx` to requirements.txt.")
+    
+    doc = Document()
+    doc.add_heading("Baithak AI Document Export", level=1)
+    
+    lines = text.split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            doc.add_heading(stripped[2:], level=1)
+        elif stripped.startswith("## "):
+            doc.add_heading(stripped[3:], level=2)
+        elif stripped.startswith("### "):
+            doc.add_heading(stripped[4:], level=3)
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            doc.add_paragraph(stripped[2:], style='List Bullet')
+        elif stripped:
+            # Basic bold rendering inside paragraph
+            p = doc.add_paragraph()
+            parts = re.split(r'(\*\*.*?\*\*)', line)
+            for part in parts:
+                if part.startswith("**") and part.endswith("**"):
+                    p.add_run(part[2:-2]).bold = True
+                else:
+                    p.add_run(part)
+                    
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def parse_markdown_tables(text: str):
+    """Extract Markdown tables into Pandas DataFrames."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    tables = []
+    current_table = []
+
+    for line in lines:
+        if line.startswith("|") and line.endswith("|"):
+            current_table.append(line)
+        else:
+            if len(current_table) >= 3:  # Header + separator + row
+                tables.append(current_table)
+            current_table = []
+
+    if len(current_table) >= 3:
+        tables.append(current_table)
+
+    dataframes = []
+    for table_lines in tables:
+        # Filter out markdown alignment separator line (e.g., |---|---|)
+        rows = []
+        for row_str in table_lines:
+            if re.match(r'^\|[\s\:\-|-]+\|$', row_str):
+                continue
+            cols = [col.strip() for col in row_str.split("|")[1:-1]]
+            rows.append(cols)
+
+        if len(rows) >= 2 and pd is not None:
+            df = pd.DataFrame(rows[1:], columns=rows[0])
+            dataframes.append(df)
+
+    return dataframes
+
+
+def generate_excel_from_tables(text: str) -> bytes:
+    """Extract tables from markdown text and export to Excel workbook."""
+    if pd is None:
+        raise RuntimeError("Data processing library `pandas` or `openpyxl` is missing.")
+    
+    dfs = parse_markdown_tables(text)
+    if not dfs:
+        raise ValueError("No markdown table found in this message to export to Excel.")
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        for idx, df in enumerate(dfs, start=1):
+            df.to_excel(writer, sheet_name=f"Table_{idx}", index=False)
+    
+    return buffer.getvalue()
+
+
+# ============================================================
+# LLM & DEMO RESPONSES
+# ============================================================
 def demo_reply(prompt):
     lower = prompt.lower()
+    role_prefix = f"**[{st.session_state.ai_role}]** "
+    
     if any(word in lower for word in ("hello", "hi", "hey", "salam", "assalam")):
         return (
-            "Hello! 👋 Welcome to **Baithak with AI**.\n\n"
-            "How can I help you today?\n\n"
+            f"{role_prefix}Hello! 👋 Welcome to **Baithak with AI**.\n\n"
+            "How can I assist you with your queries, emails, or documentation today?\n\n"
             "_Demo Mode is active; this is a sample response, not a live AI answer._"
         )
-    if any(word in lower for word in ("python", "code", "program", "debug")):
+    if "email" in lower or "letter" in lower or "clerk" in lower:
         return (
-            "I'd be happy to help with your coding task! 💻\n\n"
-            "Please share your goal, your current code, and the complete error message.\n\n"
-            "**Demo Mode is active**, so this is a limited sample response. "
-            "Configure `OPENAI_API_KEY` to enable live AI responses."
+            f"{role_prefix}Here is a formal draft template:\n\n"
+            "**Subject:** Formal Notice & Project Update\n\n"
+            "Dear Executive Team,\n\n"
+            "I am writing to provide a structured update regarding current operations.\n\n"
+            "| Item | Status | Action Required |\n"
+            "| :--- | :--- | :--- |\n"
+            "| Project Documentation | Complete | Review & Sign |\n"
+            "| Data Sheet Export | Ready | Download Excel |\n\n"
+            "Sincerely,\n\n**Baithak Clerk AI**\n\n"
+            "_Demo Mode active. Configure OPENAI_API_KEY for live generation._"
         )
     return (
-        f"I received your message:\n\n> {prompt}\n\n"
-        "**Demo Mode is active.** This fallback cannot provide a full AI-generated answer. "
-        "Configure `OPENAI_API_KEY` to enable the live assistant."
+        f"{role_prefix}I received your request:\n\n> {prompt}\n\n"
+        "**Demo Mode is active.** Configure `OPENAI_API_KEY` to enable the live assistant."
     )
 
 
@@ -161,17 +310,19 @@ def generate_reply(messages):
         return demo_reply(messages[-1]["content"])
 
     try:
-        # Responses API supports role-based input messages.
+        active_system_prompt = SYSTEM_PROMPTS.get(
+            st.session_state.ai_role, SYSTEM_PROMPTS["General Assistant"]
+        )
         response = client.responses.create(
             model=MODEL,
-            instructions=SYSTEM_PROMPT,
+            instructions=active_system_prompt,
             input=messages,
         )
         answer = getattr(response, "output_text", None)
         if not answer or not answer.strip():
             raise ValueError("The model returned an empty response.")
         st.session_state.mode = "OpenAI"
-        st.session_state.notice = f"Connected · {MODEL}"
+        st.session_state.notice = f"Connected · {MODEL} · ({st.session_state.ai_role})"
         return answer.strip()
     except Exception:
         logger.exception("OpenAI response request failed.")
@@ -181,13 +332,12 @@ def generate_reply(messages):
         )
         return (
             "I couldn't get a response from the live AI service, so I've switched to **Demo Mode**.\n\n"
-            f"The configured model is `{MODEL}`. Check whether this model ID is enabled for your API project, "
-            "and verify your API key and billing/quota."
+            f"The configured model is `{MODEL}`. Check whether this model ID is enabled for your API project."
         )
 
 
 def extract_uploaded_text(uploaded_file):
-    """Extract text from PDF, DOCX, or TXT uploads without saving them to disk."""
+    """Extract text from PDF, DOCX, or TXT uploads without saving to disk."""
     filename = uploaded_file.name
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     raw = uploaded_file.getvalue()
@@ -225,7 +375,6 @@ def extract_uploaded_text(uploaded_file):
 
 
 def add_uploaded_documents(uploaded_files, conversation):
-    """Read uploads and attach extracted text to the active conversation."""
     if not uploaded_files:
         return
     existing = {doc.get("name") for doc in conversation.setdefault("documents", [])}
@@ -236,9 +385,8 @@ def add_uploaded_documents(uploaded_files, conversation):
         try:
             extracted = extract_uploaded_text(uploaded_file)
             if not extracted:
-                st.warning(f"{uploaded_file.name}: no selectable text was found. Scanned PDFs may need OCR first.")
+                st.warning(f"{uploaded_file.name}: no selectable text was found.")
                 continue
-            # Limit per-file text to keep requests manageable.
             max_chars = 80000
             was_truncated = len(extracted) > max_chars
             extracted = extracted[:max_chars]
@@ -254,7 +402,7 @@ def add_uploaded_documents(uploaded_files, conversation):
         names = [d["name"] for d in conversation["documents"]]
         conversation["messages"].append({
             "role": "assistant",
-            "content": "📎 **Documents ready for this conversation:**\n\n" + "\n".join(f"- {name}" for name in names) + "\n\nAsk me a question about the uploaded files."
+            "content": "📎 **Documents attached to this conversation:**\n\n" + "\n".join(f"- {name}" for name in names) + "\n\nYou can ask me to summarize, draft emails, or format data from these files."
         })
         st.session_state.notice = f"Added {added} document(s) to this conversation."
 
@@ -271,8 +419,6 @@ def submit_prompt(prompt):
         for m in conversation["messages"]
         if m["role"] in ("user", "assistant")
     ]
-    # Include extracted documents as context for the live model. The text stays in
-    # this Streamlit session and is only sent when the user submits a chat prompt.
     documents = conversation.get("documents", [])
     if documents and api_messages and api_messages[-1]["role"] == "user":
         chunks = []
@@ -284,15 +430,14 @@ def submit_prompt(prompt):
             chunks.append(f"\n\n--- Uploaded document: {doc['name']} ---\n{piece}")
             remaining -= len(piece)
         api_messages[-1]["content"] += (
-            "\n\nUse the following uploaded document text as source material when relevant. "
-            "If the answer is not supported by the files, say so.\n" + "".join(chunks)
+            "\n\nUse the following uploaded document text as source material when relevant.\n" + "".join(chunks)
         )
     answer = generate_reply(api_messages)
     conversation["messages"].append({"role": "assistant", "content": answer})
 
 
 # ============================================================
-# CSS
+# STYLING
 # ============================================================
 st.markdown("""
 <style>
@@ -342,6 +487,17 @@ with st.sidebar:
         st.rerun()
 
     st.markdown(
+        "<div style='font-size:.78rem;color:#777;font-weight:650;padding:.9rem .6rem .4rem;'>SELECT AI ROLE</div>",
+        unsafe_allow_html=True,
+    )
+    st.session_state.ai_role = st.selectbox(
+        "AI Assistant Persona",
+        options=["General Assistant", "Clerk AI (Documentation & Emails)"],
+        index=0 if st.session_state.ai_role == "General Assistant" else 1,
+        label_visibility="collapsed"
+    )
+
+    st.markdown(
         "<div style='font-size:.78rem;color:#777;font-weight:650;padding:.9rem .6rem .4rem;'>YOUR CHATS</div>",
         unsafe_allow_html=True,
     )
@@ -363,9 +519,9 @@ with st.sidebar:
     )
     st.caption(f"Model: `{MODEL}`")
     if st.session_state.mode == "OpenAI":
-        st.success("OpenAI response received")
+        st.success("OpenAI connected")
     elif client is not None:
-        st.info("OpenAI client configured")
+        st.info("OpenAI client ready")
     else:
         st.info("Demo Mode active")
 
@@ -392,10 +548,10 @@ with st.sidebar:
 # MAIN APP HEADER
 # ============================================================
 st.markdown(
-    """
+    f"""
     <div class="topbar">
       <div class="brand"><span class="brand-mark">✳</span>Baithak <span style="font-weight:400;color:#777;">with AI</span></div>
-      <div class="status">GPT Luna · Text assistant</div>
+      <div class="status">Role: {st.session_state.ai_role}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -406,7 +562,7 @@ if st.session_state.notice:
 
 
 # ============================================================
-# ANIMATED ROBOT + WELCOME POPUP
+# ANIMATED ROBOT WIDGET
 # ============================================================
 robot_html = r"""
 <!doctype html>
@@ -468,10 +624,10 @@ p{margin:0;color:#65716d;line-height:1.6;font-size:14px}
   <div class="copy">
     <span class="kicker">YOUR AI COMPANION</span>
     <h2>Welcome to Baithak with AI</h2>
-    <p>Your ideas, questions, learning, and creativity have a place here. Start a conversation and let's make something useful together.</p>
+    <p>Your workspace for ideas, intelligent draft writing, document extraction, and file exports.</p>
     <div class="popup">
-      <strong>👋 Hello everyone! I'm Baithak.</strong>
-      <small>I'm ready to help you explore ideas, write, learn, and solve problems.</small>
+      <strong>👋 Baithak Clerk AI is Active!</strong>
+      <small>Draft official emails, organize records, and export documents directly to PDF, Word, or Excel.</small>
     </div>
   </div>
 </div>
@@ -482,22 +638,22 @@ components.html(robot_html, height=300, scrolling=False)
 
 
 # ============================================================
-# CHAT AREA
+# CHAT INTERFACE & GENERATION
 # ============================================================
 conversation = st.session_state.conversations[st.session_state.active_conversation]
 
 if not conversation["messages"]:
     st.markdown(
-        "<h3 style='text-align:center;margin-top:1.2rem;'>What can I help with?</h3>"
-        "<p style='text-align:center;color:#777;'>Choose a suggestion or type your message below.</p>",
+        "<h3 style='text-align:center;margin-top:1.2rem;'>How can I assist your workflow today?</h3>"
+        "<p style='text-align:center;color:#777;'>Choose a quick task below or type a custom prompt.</p>",
         unsafe_allow_html=True,
     )
 
     suggestions = [
-        ("💡 Brainstorm ideas", "Help me brainstorm creative ideas for a project."),
-        ("💻 Write or debug code", "Help me write a Python program and explain it step by step."),
-        ("📝 Write something", "Help me write a clear, professional email."),
-        ("📚 Learn a topic", "Teach me a difficult topic in simple words with examples."),
+        ("✉️ Draft Official Email", "Draft a polite and formal email to a client requesting project requirements and timelines."),
+        ("📑 Create Executive Report Table", "Generate a structured quarterly progress report with a clean table showing KPIs, status, and targets."),
+        ("💡 Brainstorm Ideas", "Help me brainstorm strategic expansion ideas for a tech project."),
+        ("💻 Write or Debug Code", "Write a Python script that parses CSV files and handles missing data cleanly."),
     ]
     cols = st.columns(2)
     for i, (label, suggested_prompt) in enumerate(suggestions):
@@ -506,23 +662,87 @@ if not conversation["messages"]:
                 submit_prompt(suggested_prompt)
                 st.rerun()
 else:
-    for message in conversation["messages"]:
+    for idx, message in enumerate(conversation["messages"]):
         avatar = "🧑" if message["role"] == "user" else "✳"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
 
+            # Export toolbar for AI Assistant responses
+            if message["role"] == "assistant":
+                content = message["content"]
+                st.markdown("---")
+                exp_col1, exp_col2, exp_col3, exp_col4 = st.columns(4)
+
+                # Export TXT
+                with exp_col1:
+                    st.download_button(
+                        label="📄 Download TXT",
+                        data=generate_txt(content),
+                        file_name=f"Baithak_Document_{idx}.txt",
+                        mime="text/plain",
+                        key=f"dl_txt_{idx}",
+                        use_container_width=True
+                    )
+
+                # Export DOCX
+                with exp_col2:
+                    try:
+                        docx_bytes = generate_docx(content)
+                        st.download_button(
+                            label="📝 Download DOCX",
+                            data=docx_bytes,
+                            file_name=f"Baithak_Document_{idx}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"dl_docx_{idx}",
+                            use_container_width=True
+                        )
+                    except Exception as err:
+                        st.caption(f"DOCX unavailable: {err}")
+
+                # Export PDF
+                with exp_col3:
+                    try:
+                        pdf_bytes = generate_pdf(content)
+                        st.download_button(
+                            label="📕 Download PDF",
+                            data=pdf_bytes,
+                            file_name=f"Baithak_Document_{idx}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_pdf_{idx}",
+                            use_container_width=True
+                        )
+                    except Exception as err:
+                        st.caption("PDF export requires `fpdf2`")
+
+                # Export Excel (if markdown table exists)
+                with exp_col4:
+                    if "|" in content and "\n" in content:
+                        try:
+                            excel_bytes = generate_excel_from_tables(content)
+                            st.download_button(
+                                label="📊 Export Excel",
+                                data=excel_bytes,
+                                file_name=f"Baithak_Tables_{idx}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=f"dl_xls_{idx}",
+                                use_container_width=True
+                            )
+                        except Exception:
+                            st.caption("No valid table to export")
+
+
 # ============================================================
-# DOCUMENT UPLOADS
+# ATTACH DOCUMENTS & CHAT INPUT
 # ============================================================
 conversation.setdefault("documents", [])
-with st.expander("📎 Attach documents to this conversation", expanded=bool(conversation.get("documents"))):
-    st.caption("Supported formats: PDF, DOCX, TXT · Multiple files are supported · Max 20 MB per file")
+with st.expander("📎 Attach documents for Clerk AI context", expanded=bool(conversation.get("documents"))):
+    st.caption("Supported formats: PDF, DOCX, TXT · Multiple files supported · Max 20 MB per file")
     uploaded_files = st.file_uploader(
-        "Upload files",
+        "Upload reference files",
         type=["pdf", "docx", "txt"],
         accept_multiple_files=True,
         key=f"document_upload_{st.session_state.active_conversation}",
-        help="Upload documents, then ask Baithak a question in the chat below.",
+        help="Upload files to summarize, extract tables, or write emails based on content.",
     )
     if st.button("Add files to conversation", key=f"add_documents_{st.session_state.active_conversation}", use_container_width=True):
         if uploaded_files:
@@ -533,19 +753,20 @@ with st.expander("📎 Attach documents to this conversation", expanded=bool(con
                 add_uploaded_documents(uploaded_files, conversation)
                 st.rerun()
         else:
-            st.info("Choose one or more PDF, DOCX, or TXT files first.")
+            st.info("Choose one or more files first.")
+            
     if conversation.get("documents"):
-        st.markdown("**Files attached to this chat**")
+        st.markdown("**Attached Files**")
         for idx, doc in enumerate(conversation["documents"]):
             col_name, col_remove = st.columns([5, 1])
             with col_name:
-                st.write(f"📄 {doc['name']}" + (" · text truncated for context limits" if doc.get("truncated") else ""))
+                st.write(f"📄 {doc['name']}" + (" · truncated" if doc.get("truncated") else ""))
             with col_remove:
                 if st.button("Remove", key=f"remove_doc_{st.session_state.active_conversation}_{idx}"):
                     conversation["documents"].pop(idx)
                     st.rerun()
 
-prompt = st.chat_input("Message Baithak...")
+prompt = st.chat_input("Ask Baithak or request email/document drafting...")
 if prompt and prompt.strip():
     submit_prompt(prompt)
     st.rerun()
@@ -557,7 +778,7 @@ if prompt and prompt.strip():
 st.markdown(
     """
     <div class="footer">
-      AI can make mistakes. Check important information.<br>
+      AI can make mistakes. Verify critical facts and documentation.<br>
       BAITHAK WITH AI · Designed by Certified Generative and Agentic AI Application Developer · Engr. Bilal Mehmood
     </div>
     """,
